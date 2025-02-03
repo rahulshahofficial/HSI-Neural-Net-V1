@@ -38,8 +38,8 @@ class HyperspectralViewer:
 
     @classmethod
     def get_all_files(cls):
-        base_path = '/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/HyperDrive_4wheelbuggyCapturedImages_SWIR'
-        # base_path = "V:\SimulationData\Rahul\Hyperspectral Imaging Project\HSI Data Sets\HyperDrive_4wheelbuggyCapturedImages_SWIR"
+        # base_path = '/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/HyperDrive_4wheelbuggyCapturedImages_SWIR'
+        base_path = "V:\SimulationData\Rahul\Hyperspectral Imaging Project\HSI Data Sets\HyperDrive_4wheelbuggyCapturedImages_SWIR"
         vnir_path = os.path.join(base_path, "VNIR_RAW")
         swir_path = os.path.join(base_path, "SWIR_RAW")
         vnir_files = {f.replace('.npy', '') for f in os.listdir(vnir_path) if f.endswith('.npy')}
@@ -121,4 +121,4 @@ def main(num_images=None):
     print(f"Results saved to {config.results_path}")
 
 if __name__ == "__main__":
-    main(num_images=10)
+    main(num_images=250)

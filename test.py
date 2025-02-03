@@ -274,6 +274,7 @@ class ReconstructionViewer(QMainWindow):
 
         with torch.no_grad():
             for filtered_measurements, _ in test_loader:
+                filtered_measurements = filtered_measurements
                 outputs = self.model(filtered_measurements)
                 reconstructed_patches.append(outputs)
 
