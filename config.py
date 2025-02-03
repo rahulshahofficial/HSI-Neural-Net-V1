@@ -29,18 +29,22 @@ class Config:
         self.num_epochs = 100
         self.learning_rate = 1e-4
         # self.num_filters = 16
-        self.num_filters = 64
+        self.num_filters = 16
         # self.superpixel_size = 4 # Change superpixel size here
-        self.superpixel_size = 8 # Change superpixel size here
-        self.conv_channels = [32, 64, 128]  # 3D Conv channels
+        self.superpixel_size = 4 # Change superpixel size here
+        self.conv_channels = [1, 128, 256]  # 3D Conv channels
         self.num_wavelengths = 19
+        self.input_channels = 1  # New parameter to make it clear we have 1 input channel
+        self.kernel_size = 3           # Make convolution kernel size configurable
+        self.padding = 1              # Make padding configurable
+        self.use_batch_norm = True    # Control batch normalization
 
         # Wavelength parameters
         self.vnir_wavelengths = (800, 900, 10)  # start, end, points
         self.swir_wavelengths = (1100, 1700, 9)  # start, end, points
 
         # Output paths
-        self.model_save_path = 'models/012925_hyperspectral_model_800to1700.pth'
+        self.model_save_path = 'models/020325_hyperspectral_model_800to1700_16filters.pth'
         self.results_path = 'results'
 
 config = Config()

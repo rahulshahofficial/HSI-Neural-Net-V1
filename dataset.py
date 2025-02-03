@@ -47,24 +47,18 @@ class HyperspectralDataset(Dataset):
         y = (idx // superpixels_per_row) * self.superpixel_size
         x = (idx % superpixels_per_row) * self.superpixel_size
 
-        # Get 8x8 superpixel
         superpixel = self.hypercube[y:y+self.superpixel_size, x:x+self.superpixel_size, :]
+        measurements = torch.zeros((self.superpixel_size, self.superpixel_size))
 
-        # Create filtered measurements
-        pixels = superpixel.reshape(-1, self.num_wavelengths)
-        filtered_measurements = torch.matmul(self.filter_matrix, pixels.T)
+        for i in range(self.superpixel_size):
+            for j in range(self.superpixel_size):
+                filter_idx = i * self.superpixel_size + j
+                # Remove torch.from_numpy since superpixel is already a tensor
+                measurements[i,j] = torch.dot(
+                    self.filter_matrix[filter_idx],
+                    superpixel[i,j,:]
+                )
 
-        # Reshape filtered measurements: [channels, depth, height, width]
-        filtered_measurements = filtered_measurements.reshape(
-            self.num_filters,
-            1,
-            self.superpixel_size,
-            self.superpixel_size
-        )
-
-        # Reshape target superpixel: [channels(wavelengths), height, width]
-        superpixel = superpixel.permute(2, 0, 1)  # Move wavelengths to first dimension
-
-        # filtered_measurements = filtered_measurements / filtered_measurements.max()
-        # superpixel = superpixel / superpixel.max()
+        filtered_measurements = measurements.unsqueeze(0)
+        superpixel = superpixel.permute(2, 0, 1)
         return filtered_measurements, superpixel

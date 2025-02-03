@@ -35,6 +35,9 @@ class Trainer:
             outputs = self.model(filtered_measurements)
             loss = self.criterion(outputs, spectra)
             loss.backward()
+
+            # Add gradient clipping
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
             self.optimizer.step()
 
             running_loss += loss.item()
