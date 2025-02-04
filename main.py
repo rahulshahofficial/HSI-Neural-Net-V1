@@ -11,14 +11,6 @@ from train import Trainer
 
 class HyperspectralViewer:
     def __init__(self, vnir_path, swir_path):
-        # First load and reshape to original dimensions
-        vnir_data = np.load(vnir_path).reshape((215, 407, 24))
-
-        # Select wavelengths between 800-900nm (indices 14-23, assuming linear spacing 660-900nm)
-        start_idx = int(((800 - 660) / (900 - 660)) * 24)  # Calculate index for 800nm
-        end_idx = start_idx + 10  # Take 10 points from there
-        self.vnir_cube = vnir_data[:, :, start_idx:end_idx]
-
         # Load SWIR data
         self.swir_cube = np.load(swir_path).reshape((168, 211, 9))
 
