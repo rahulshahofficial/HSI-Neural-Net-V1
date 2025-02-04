@@ -8,6 +8,21 @@ from config import config
 
 class HyperspectralDataset(Dataset):
     def __init__(self, hyperspectral_cube):
+        # First, let's pad the spatial dimensions if needed
+        h, w, wavelengths = hyperspectral_cube.shape
+
+        # Calculate needed padding
+        pad_h = (self.superpixel_size - (h % self.superpixel_size)) % self.superpixel_size
+        pad_w = (self.superpixel_size - (w % self.superpixel_size)) % self.superpixel_size
+
+        # Create padded cube if needed
+        if pad_h > 0 or pad_w > 0:
+            padded_cube = np.zeros((h + pad_h, w + pad_w, wavelengths))
+            padded_cube[:h, :w, :] = hyperspectral_cube
+            hyperspectral_cube = padded_cube
+            print(f"Padded image from {h}×{w} to {h+pad_h}×{w+pad_w} to ensure complete filter patterns")
+
+        # Normalize and convert to tensor
         hyperspectral_cube = hyperspectral_cube / np.max(hyperspectral_cube)
         self.hypercube = torch.from_numpy(hyperspectral_cube).float()
         self.num_filters = config.num_filters
@@ -50,10 +65,16 @@ class HyperspectralDataset(Dataset):
         superpixel = self.hypercube[y:y+self.superpixel_size, x:x+self.superpixel_size, :]
         measurements = torch.zeros((self.superpixel_size, self.superpixel_size))
 
+        # Calculate base position within the repeating pattern
+        pattern_y = y % self.superpixel_size
+        pattern_x = x % self.superpixel_size
+
         for i in range(self.superpixel_size):
             for j in range(self.superpixel_size):
-                filter_idx = i * self.superpixel_size + j
-                # Remove torch.from_numpy since superpixel is already a tensor
+                # Calculate filter index based on position within repeating pattern
+                filter_idx = ((i + pattern_y) % self.superpixel_size) * self.superpixel_size + \
+                            ((j + pattern_x) % self.superpixel_size)
+
                 measurements[i,j] = torch.dot(
                     self.filter_matrix[filter_idx],
                     superpixel[i,j,:]
