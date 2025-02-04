@@ -121,4 +121,4 @@ def main(num_images=None):
     print(f"Results saved to {config.results_path}")
 
 if __name__ == "__main__":
-    main(num_images=20)
+    main(num_images=2)
