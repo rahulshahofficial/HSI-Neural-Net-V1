@@ -10,36 +10,36 @@ from network import HyperspectralNet
 from train import Trainer
 
 class HyperspectralViewer:
-    def __init__(self, vnir_path, swir_path):
+    def __init__(self, swir_path):
         # Load SWIR data
         self.swir_cube = np.load(swir_path).reshape((168, 211, 9))
 
         # Define wavelengths
-        self.wavelengths = np.concatenate([
-            np.linspace(800, 900, 10),
-            np.linspace(1100, 1700, 9)
-        ])
+        self.wavelengths = np.linspace(1100, 1700, 9)
 
-        self.combined_cube = self.combine_cubes()
+        # Pad the SWIR cube dimensions to be multiples of superpixel_size
+        self.cube = self.pad_cube()
 
-    def combine_cubes(self):
-        resized_swir = np.zeros((215, 407, 9))
-        for i in range(9):
-            resized_swir[:,:,i] = np.resize(self.swir_cube[:,:,i], (215, 407))
-        return np.concatenate((self.vnir_cube, resized_swir), axis=2)
+    def pad_cube(self):
+        h, w, wavelengths = self.swir_cube.shape
+        # Calculate padding needed to make dimensions multiples of superpixel_size
+        pad_h = (config.superpixel_size - (h % config.superpixel_size)) % config.superpixel_size
+        pad_w = (config.superpixel_size - (w % config.superpixel_size)) % config.superpixel_size
+
+        # Create padded cube
+        padded_cube = np.zeros((h + pad_h, w + pad_w, wavelengths))
+        padded_cube[:h, :w, :] = self.swir_cube
+        print(f"Padded SWIR cube from {h}×{w} to {h+pad_h}×{w+pad_w}")
+        return padded_cube
 
     @classmethod
     def get_all_files(cls):
         # base_path = '/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/HyperDrive_4wheelbuggyCapturedImages_SWIR'
         base_path = "V:\SimulationData\Rahul\Hyperspectral Imaging Project\HSI Data Sets\HyperDrive_4wheelbuggyCapturedImages_SWIR"
-        vnir_path = os.path.join(base_path, "VNIR_RAW")
         swir_path = os.path.join(base_path, "SWIR_RAW")
-        vnir_files = {f.replace('.npy', '') for f in os.listdir(vnir_path) if f.endswith('.npy')}
-        swir_files = {f.replace('.npy', '') for f in os.listdir(swir_path) if f.endswith('.npy')}
-        common_files = vnir_files.intersection(swir_files)
         return {
-            'files': sorted(list(common_files)),
-            'vnir_path': vnir_path,
+            'files': sorted([f.replace('.npy', '') for f in os.listdir(swir_path)
+                           if f.endswith('.npy')]),
             'swir_path': swir_path
         }
 
@@ -49,10 +49,9 @@ class HyperspectralViewer:
         combined_data = []
         for filename in paths['files'][:num_images]:
             print(f"Loading file: {filename}")
-            vnir_file = os.path.join(paths['vnir_path'], f"{filename}.npy")
             swir_file = os.path.join(paths['swir_path'], f"{filename}.npy")
-            viewer = HyperspectralViewer(vnir_file, swir_file)
-            combined_data.append(viewer.combined_cube)
+            viewer = HyperspectralViewer(swir_file)
+            combined_data.append(viewer.cube)
         return np.concatenate(combined_data, axis=0)
 
 def main(num_images=None):
@@ -97,7 +96,7 @@ def main(num_images=None):
         recon_spectrum = reconstructed_spectrum[:, center_h, center_w].numpy()
 
         plt.figure(figsize=(10, 6))
-        wavelengths = np.concatenate([np.linspace(800, 900, 10), np.linspace(1100, 1700, 9)])
+        wavelengths = np.linspace(1100, 1700, 9)
         plt.plot(wavelengths, orig_spectrum, 'b-', label='Original')
         plt.plot(wavelengths, recon_spectrum, 'r--', label='Reconstructed')
         plt.xlabel('Wavelength (nm)')
@@ -113,4 +112,4 @@ def main(num_images=None):
     print(f"Results saved to {config.results_path}")
 
 if __name__ == "__main__":
-    main(num_images=2)
+    main(num_images=100)

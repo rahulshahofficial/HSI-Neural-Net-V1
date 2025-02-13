@@ -9,6 +9,10 @@ from config import config
 class HyperspectralDataset(Dataset):
     def __init__(self, hyperspectral_cube):
         # First, let's pad the spatial dimensions if needed
+        # Initialize class attributes first
+        self.num_filters = config.num_filters
+        self.superpixel_size = config.superpixel_size
+        self.num_wavelengths = hyperspectral_cube.shape[-1]
         h, w, wavelengths = hyperspectral_cube.shape
 
         # Calculate needed padding
@@ -25,25 +29,46 @@ class HyperspectralDataset(Dataset):
         # Normalize and convert to tensor
         hyperspectral_cube = hyperspectral_cube / np.max(hyperspectral_cube)
         self.hypercube = torch.from_numpy(hyperspectral_cube).float()
-        self.num_filters = config.num_filters
-        self.superpixel_size = config.superpixel_size
-        self.num_wavelengths = hyperspectral_cube.shape[-1]
         self.load_filter_data()
 
     def load_filter_data(self):
+        # Read the CSV file, knowing first column is filter names
         self.filters = pd.read_csv(config.filter_path, header=None)
-        filter_wavelengths = np.linspace(800, 1700, self.filters.shape[1]-1)
-        filter_transmissions = self.filters.iloc[:self.num_filters, 1:].values
 
-        cube_wavelengths = np.concatenate([
-            np.linspace(800,900,10),
-            np.linspace(*config.swir_wavelengths)
-        ])
+        # Calculate the wavelength spacing in the original CSV
+        # 450 points span 800nm to 1700nm
+        num_wavelength_points = 450
+        csv_wavelengths = np.linspace(800, 1700, num_wavelength_points)
+        wavelength_spacing = (1700 - 800) / (num_wavelength_points - 1)
+
+        # Calculate indices for SWIR region (1100-1700nm)
+        # Using the known spacing, we can calculate exact indices
+        swir_start_idx = int((1100 - 800) / wavelength_spacing)  # Index for 1100nm
+        swir_end_idx = num_wavelength_points  # Index for 1700nm
+
+        # Extract filter transmissions for SWIR region
+        # Add 1 to indices because first column is filter names
+        filter_transmissions = self.filters.iloc[:self.num_filters,
+                                               swir_start_idx+1:swir_end_idx+1].values
+
+        # Get the actual wavelengths for our SWIR measurements
+        cube_wavelengths = np.linspace(*config.swir_wavelengths)
+
+        # Get the corresponding wavelengths from the CSV for the SWIR region
+        csv_swir_wavelengths = csv_wavelengths[swir_start_idx:swir_end_idx]
+
+        # Create our filter matrix through interpolation
         self.filter_matrix = self._interpolate_filters(
             filter_transmissions,
-            filter_wavelengths,
-            cube_wavelengths
+            csv_swir_wavelengths,  # Original wavelengths from CSV (1100-1700nm)
+            cube_wavelengths       # Target wavelengths for our measurements
         ).float()
+
+        # Add verification prints
+        print(f"Original CSV wavelength range: 800nm to 1700nm ({num_wavelength_points} points)")
+        print(f"SWIR wavelength range: {cube_wavelengths[0]:.1f}nm to {cube_wavelengths[-1]:.1f}nm")
+        print(f"Number of SWIR wavelength points: {len(cube_wavelengths)}")
+        print(f"Filter matrix shape: {self.filter_matrix.shape}")
 
     def _interpolate_filters(self, filters, src_wavelengths, dst_wavelengths):
         interpolated = []

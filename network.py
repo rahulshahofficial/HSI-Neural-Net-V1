@@ -6,9 +6,8 @@ class HyperspectralNet(nn.Module):
     def __init__(self):
         super(HyperspectralNet, self).__init__() # Ensures that the class inherits the functionalities of nn.Module
 
-        # Input: [64, 1, 1, 8, 8]
+        # Input: [batch_size, no of inputs (1 intensity measurement per filter), patch(superpixel) height, patch(superpixel) width]
         self.encoder = nn.Sequential(
-            # nn.Conv3d(16, 128, kernel_size=(1,3,3), padding=(0,1,1)), # Superpixel Size 4 x 4
             nn.Conv2d(1, 128, kernel_size=3, padding=1), # Superpixel size 8 x 8
             nn.ReLU(),
             nn.BatchNorm2d(128),
@@ -23,7 +22,7 @@ class HyperspectralNet(nn.Module):
             nn.Conv2d(256, 128, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.BatchNorm2d(128),
-            nn.Conv2d(128, 19, kernel_size=3, padding=1)  # 10 (800-900nm) + 9 (1100-1700nm)
+            nn.Conv2d(128, 9, kernel_size=3, padding=1)  # 10 (800-900nm) + 9 (1100-1700nm)
         )
 
     def forward(self, x):

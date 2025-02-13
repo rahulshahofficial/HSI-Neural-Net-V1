@@ -52,8 +52,8 @@ class ReconstructionViewer(QMainWindow):
         # Add wavelength slider
         self.wavelength_slider = QSlider(Qt.Horizontal)
         self.wavelength_slider.setMinimum(0)
-        self.wavelength_slider.setMaximum(18)  # 19 wavelengths - 1
-        self.wavelength_slider.setValue(9)  # Middle wavelength
+        self.wavelength_slider.setMaximum(8)  # 9 wavelengths - 1
+        self.wavelength_slider.setValue(4)  # Middle wavelength
         self.wavelength_slider.valueChanged.connect(self.update_wavelength_display)
         control_layout.addWidget(QLabel("Wavelength:"))
         control_layout.addWidget(self.wavelength_slider)
@@ -232,44 +232,33 @@ class ReconstructionViewer(QMainWindow):
         selected_file = self.file_combo.currentText()
 
         # Direct data loading
-        vnir_cube = np.load(os.path.join(config.dataset_path, "VNIR_RAW", f"{selected_file}.npy"))
         swir_cube = np.load(os.path.join(config.dataset_path, "SWIR_RAW", f"{selected_file}.npy"))
 
-        # First reshape VNIR to original dimensions
-        vnir_cube = vnir_cube.reshape((215, 407, 24))
-
-        # Select wavelengths between 800-900nm
-        start_idx = int(((800 - 660) / (900 - 660)) * 24)  # Calculate index for 800nm
-        end_idx = start_idx + 10  # Take 10 points from there
-        vnir_cube = vnir_cube[:, :, start_idx:end_idx]
 
         # Reshape SWIR
         swir_cube = swir_cube.reshape((168, 211, 9))
 
-        # Resize SWIR to match VNIR dimensions
-        resized_swir = np.zeros((215, 407, 9))
-        for i in range(9):
-            resized_swir[:,:,i] = cv2.resize(swir_cube[:,:,i], (407, 215))
 
-        # Combine cubes
-        combined_cube = np.concatenate((vnir_cube, resized_swir), axis=2)
+
+        # Pad dimensions to be multiples of superpixel_size
+        h, w, wavelengths = swir_cube.shape
+        pad_h = (config.superpixel_size - (h % config.superpixel_size)) % config.superpixel_size
+        pad_w = (config.superpixel_size - (w % config.superpixel_size)) % config.superpixel_size
+
+        padded_cube = np.zeros((h + pad_h, w + pad_w, wavelengths))
+        padded_cube[:h, :w, :] = swir_cube
 
         # Store data
-        self.original_image = combined_cube / np.max(combined_cube)
-        # self.original_image = combined_cube
-
-        self.wavelengths = np.concatenate([
-            np.linspace(800, 900, 10),
-            np.linspace(1100, 1700, 9)
-        ])
+        self.original_image = padded_cube / np.max(padded_cube)
+        self.wavelengths = np.linspace(1100, 1700, 9)
 
         # Create dataset
-        dataset = HyperspectralDataset(combined_cube)
+        dataset = HyperspectralDataset(padded_cube)
         test_loader = DataLoader(dataset, batch_size=64)
 
         # Run reconstruction
         reconstructed_patches = []
-        h, w, _ = combined_cube.shape
+        h, w, _ = padded_cube.shape
         superpixel_size = dataset.superpixel_size
 
         with torch.no_grad():
@@ -283,7 +272,7 @@ class ReconstructionViewer(QMainWindow):
         patches_per_row = w // superpixel_size
 
         # Initialize full reconstruction array
-        self.full_reconstruction = torch.zeros((h, w, 19), dtype=torch.float32)
+        self.full_reconstruction = torch.zeros((h, w, 9), dtype=torch.float32)
 
         # Place patches back into image
         for idx in range(len(reconstructed_patches)):
