@@ -50,7 +50,7 @@ class Config:
 
         self.num_filters = 9
         self.superpixel_size = 3
-        self.model_save_path = 'models/020425_hyperspectral_model_800to1700_9filters_2.pth'
+        self.model_save_path = 'models/021425_hyperspectral_model_1100to1700_9filters.pth'
         self.results_path = 'results'
 
 config = Config()

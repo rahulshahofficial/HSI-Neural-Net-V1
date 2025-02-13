@@ -4,42 +4,57 @@ from config import config
 
 class HyperspectralNet(nn.Module):
     def __init__(self):
-        super(HyperspectralNet, self).__init__() # Ensures that the class inherits the functionalities of nn.Module
+        super(HyperspectralNet, self).__init__()
 
-        # Input: [batch_size, no of inputs (1 intensity measurement per filter), patch(superpixel) height, patch(superpixel) width]
+        # Deeper encoder for handling full-image context
         self.encoder = nn.Sequential(
-            nn.Conv2d(1, 128, kernel_size=3, padding=1), # Superpixel size 8 x 8
+            nn.Conv2d(1, 64, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(64),
+
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.BatchNorm2d(128),
 
             nn.Conv2d(128, 256, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.BatchNorm2d(256)
+            nn.BatchNorm2d(256),
+
+            nn.Conv2d(256, 512, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(512)
         )
 
-        # Decoder to reconstruct spectral information
+        # Decoder with skip connections
         self.decoder = nn.Sequential(
+            nn.Conv2d(512, 256, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(256),
+
             nn.Conv2d(256, 128, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.BatchNorm2d(128),
-            nn.Conv2d(128, 9, kernel_size=3, padding=1)  # 10 (800-900nm) + 9 (1100-1700nm)
+
+            nn.Conv2d(128, 64, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(64),
+
+            nn.Conv2d(64, config.num_wavelengths, kernel_size=3, padding=1)
         )
 
     def forward(self, x):
+        # Encoder
         x = self.encoder(x)
+
+        # Decoder
         x = self.decoder(x)
-        # x = torch.clamp(x, 0.0, 1.0)
-        # x = x.squeeze(2)  # Remove extra dimensions
 
-        # First ensure non-negativity while preserving relative relationships
+        # Ensure non-negativity and normalization
         x = torch.relu(x)
-
-        # Global normalization to maintain relative intensities
         x_max = x.max()
         if x_max > 0:
             x = x / (x_max + 1e-8)
 
         return x
 
-    def add_spectral_constraint(self, output):
-        return torch.clamp(output, min=0.0)
+
