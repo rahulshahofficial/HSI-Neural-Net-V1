@@ -16,27 +16,28 @@ class Trainer:
         self.model = model.to(self.device)
         self.train_loader = train_loader
         self.val_loader = val_loader
-
         self.criterion = nn.MSELoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=config.learning_rate)
-
         self.train_losses = []
         self.val_losses = []
+        print(f"Training on device: {self.device}")
 
     def train_epoch(self):
         self.model.train()
         running_loss = 0.0
-
         for filtered_measurements, spectra in self.train_loader:
+            # Move data to device
             filtered_measurements = filtered_measurements.to(self.device)
             spectra = spectra.to(self.device)
 
             self.optimizer.zero_grad()
             outputs = self.model(filtered_measurements)
+
+            # Calculate loss
             loss = self.criterion(outputs, spectra)
             loss.backward()
 
-            # Add gradient clipping
+            # Gradient clipping
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
             self.optimizer.step()
 
@@ -62,11 +63,11 @@ class Trainer:
 
         return running_loss / len(self.val_loader)
 
-    def train(self, num_epochs=None):
+    def train(self, num_epochs=None, verbose=True):
         if num_epochs is None:
             num_epochs = config.num_epochs
 
-        print(f"Starting training on {self.device}")
+        best_val_loss = float('inf')
 
         for epoch in range(num_epochs):
             train_loss = self.train_epoch()
@@ -76,18 +77,28 @@ class Trainer:
                 val_loss = self.validate()
                 self.val_losses.append(val_loss)
 
-            if (epoch + 1) % 10 == 0:
+                # Save best model
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    self.save_model()
+
+            if verbose and (epoch + 1) % 10 == 0:
                 print(f'Epoch [{epoch+1}/{num_epochs}]')
                 print(f'Training Loss: {train_loss:.6f}')
                 if self.val_loader is not None:
                     print(f'Validation Loss: {val_loss:.6f}')
 
-        self.save_model()
         self.plot_training_history()
+        return best_val_loss
 
     def save_model(self):
         os.makedirs(os.path.dirname(config.model_save_path), exist_ok=True)
-        torch.save(self.model.state_dict(), config.model_save_path)
+        torch.save({
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'train_losses': self.train_losses,
+            'val_losses': self.val_losses
+        }, config.model_save_path)
         print(f"Model saved to {config.model_save_path}")
 
     def plot_training_history(self):

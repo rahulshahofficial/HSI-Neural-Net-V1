@@ -231,55 +231,23 @@ class ReconstructionViewer(QMainWindow):
 
         selected_file = self.file_combo.currentText()
 
-        # Direct data loading
+        # Load SWIR data
         swir_cube = np.load(os.path.join(config.dataset_path, "SWIR_RAW", f"{selected_file}.npy"))
-
-
-        # Reshape SWIR
         swir_cube = swir_cube.reshape((168, 211, 9))
 
-
-
-        # Pad dimensions to be multiples of superpixel_size
-        h, w, wavelengths = swir_cube.shape
-        pad_h = (config.superpixel_size - (h % config.superpixel_size)) % config.superpixel_size
-        pad_w = (config.superpixel_size - (w % config.superpixel_size)) % config.superpixel_size
-
-        padded_cube = np.zeros((h + pad_h, w + pad_w, wavelengths))
-        padded_cube[:h, :w, :] = swir_cube
-
         # Store data
-        self.original_image = padded_cube / np.max(padded_cube)
+        self.original_image = swir_cube / np.max(swir_cube)
         self.wavelengths = np.linspace(1100, 1700, 9)
 
-        # Create dataset
-        dataset = HyperspectralDataset(padded_cube)
-        test_loader = DataLoader(dataset, batch_size=64)
+        # Create dataset with same seed used in training
+        dataset = HyperspectralDataset(self.original_image, seed=42)
+        filtered_measurements, _ = dataset[0]
 
         # Run reconstruction
-        reconstructed_patches = []
-        h, w, _ = padded_cube.shape
-        superpixel_size = dataset.superpixel_size
-
         with torch.no_grad():
-            for filtered_measurements, _ in test_loader:
-                filtered_measurements = filtered_measurements
-                outputs = self.model(filtered_measurements)
-                reconstructed_patches.append(outputs)
-
-        # Reshape reconstructions back into image
-        reconstructed_patches = torch.cat(reconstructed_patches, dim=0)
-        patches_per_row = w // superpixel_size
-
-        # Initialize full reconstruction array
-        self.full_reconstruction = torch.zeros((h, w, 9), dtype=torch.float32)
-
-        # Place patches back into image
-        for idx in range(len(reconstructed_patches)):
-            i = (idx // patches_per_row) * superpixel_size
-            j = (idx % patches_per_row) * superpixel_size
-            self.full_reconstruction[i:i+superpixel_size, j:j+superpixel_size, :] = \
-                reconstructed_patches[idx].permute(1, 2, 0)
+            filtered_measurements = filtered_measurements.unsqueeze(0)  # Add batch dimension
+            reconstructed = self.model(filtered_measurements)
+            self.full_reconstruction = reconstructed.squeeze(0).permute(1, 2, 0)
 
         # Calculate RMSE
         mse = torch.mean((self.full_reconstruction - torch.tensor(self.original_image)) ** 2)
