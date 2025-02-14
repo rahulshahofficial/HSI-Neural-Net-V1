@@ -35,11 +35,11 @@ class Config:
         self.swir_wavelengths = (1100, 1700, 9)  # start, end, points
 
         # Filter arrangement parameters
-        self.num_arrangements = 2  # Number of random arrangements to try
+        self.num_arrangements = 5  # Number of random arrangements to try
         self.arrangement_seed = 42  # Base seed for reproducibility
 
         # Output paths
-        self.model_save_path = 'models/Random_Filter_Arrangement_1100to1700_9filters.pth'
+        self.model_save_path = 'models/021425/Random_Filter_Arrangement_1100to1700_9filters.pth'
         self.results_path = 'results/021425'
         self.arrangements_path = os.path.join(self.results_path, 'arrangements')
 

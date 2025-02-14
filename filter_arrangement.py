@@ -6,8 +6,13 @@ import seaborn as sns
 from tqdm import tqdm
 import os
 
+from config import config
+from dataset import HyperspectralDataset
+from network import HyperspectralNet
+from train import Trainer
+
 class FilterArrangementEvaluator:
-    def __init__(self, hyperspectral_images, model_class, num_arrangements=10, base_seed=42):
+    def __init__(self, hyperspectral_images, model_class, num_arrangements=None, base_seed=42):
         """
         Args:
             hyperspectral_images: Training images
@@ -21,6 +26,7 @@ class FilterArrangementEvaluator:
         self.base_seed = base_seed
         self.results = []
         self.best_model = None
+        self.num_arrangements = config.num_arrangements
 
         # Set random seed for reproducibility
         torch.manual_seed(self.base_seed)

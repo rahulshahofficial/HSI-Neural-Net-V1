@@ -1,7 +1,7 @@
 import os
 import torch
 from torch.utils.data import DataLoader, random_split
-import torch.nn.function as F
+from torch.nn import functional as F
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -40,7 +40,7 @@ class HyperspectralViewer:
             combined_data.append(viewer.cube)
         return np.stack(combined_data)  # Stack preserves image structure
 
-def main(num_images=100, num_arrangements=5):
+def main(num_images=100):
     torch.manual_seed(42)
     print("Starting Hyperspectral Neural Network Training...")
 
@@ -51,15 +51,15 @@ def main(num_images=100, num_arrangements=5):
         all_data = all_data.reshape(1, *all_data.shape)
 
     # Create evaluator
-    print(f"\nEvaluating {num_arrangements} different filter arrangements...")
+    print(f"\nEvaluating {config.num_arrangements} different filter arrangements...")
     evaluator = FilterArrangementEvaluator(
         all_data,
         HyperspectralNet,
-        num_arrangements=num_arrangements
+        num_arrangements=config.num_arrangements
     )
 
     # Find best arrangement and get trained model
-    best_result = evaluator.find_best_arrangement()
+    best_result = evaluator.evaluate_all()
     best_model = evaluator.best_model
 
     # Visualize filter arrangements
@@ -104,7 +104,7 @@ def main(num_images=100, num_arrangements=5):
 
         # Save spectral comparison
         os.makedirs('results', exist_ok=True)
-        plt.savefig('results/sample_reconstruction.png')
+        plt.savefig('results/021425/sample_reconstruction.png')
         plt.close()
 
         # Visualize full image reconstruction at middle wavelength
@@ -133,7 +133,7 @@ def main(num_images=100, num_arrangements=5):
         plt.colorbar()
 
         plt.tight_layout()
-        plt.savefig('results/full_image_comparison.png')
+        plt.savefig('results/021425/full_image_comparison.png')
         plt.close()
 
         # Calculate and print error metrics
@@ -148,4 +148,4 @@ def main(num_images=100, num_arrangements=5):
 
 if __name__ == "__main__":
     # Can adjust these parameters
-    main(num_images=100, num_arrangements=5)
+    main(num_images=50)

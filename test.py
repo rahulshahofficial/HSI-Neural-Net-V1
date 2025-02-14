@@ -2,7 +2,7 @@ from config import config
 from network import HyperspectralNet
 from dataset import HyperspectralDataset
 from main import HyperspectralViewer
-from viewer import HyperspectralViewer
+# from viewer import HyperspectralViewer
 
 import sys
 import time
@@ -101,7 +101,8 @@ class ReconstructionViewer(QMainWindow):
 
         # Load the trained model
         self.model = HyperspectralNet()
-        self.model.load_state_dict(torch.load(config.model_save_path, weights_only=True))
+        checkpoint = torch.load(config.model_save_path)
+        self.model.load_state_dict(checkpoint['model_state_dict'])
         self.model.eval()
 
     def plot_coordinates(self):
