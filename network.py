@@ -6,45 +6,43 @@ class FullImageHyperspectralNet(nn.Module):
     def __init__(self):
         super(FullImageHyperspectralNet, self).__init__()
 
-        # Define network parameters
-        self.input_channels = 1  # Single channel input (intensity measurements)
+        self.input_channels = 1
         self.num_wavelengths = config.num_wavelengths
 
-        # Encoder path with larger receptive field
-        self.encoder = nn.Sequential(
-            # First block
+        # Encoder with saved intermediate outputs for skip connections
+        self.encoder1 = nn.Sequential(
             nn.Conv2d(self.input_channels, 64, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.BatchNorm2d(64),
+            nn.BatchNorm2d(64)
+        )
 
-            # Second block
+        self.encoder2 = nn.Sequential(
             nn.Conv2d(64, 128, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.BatchNorm2d(128),
+            nn.BatchNorm2d(128)
+        )
 
-            # Third block
+        self.encoder3 = nn.Sequential(
             nn.Conv2d(128, 256, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.BatchNorm2d(256)
         )
 
-        # Decoder path with skip connections
-        self.decoder = nn.Sequential(
-            # First block
-            nn.Conv2d(256, 128, kernel_size=3, padding=1),
+        # Decoder with skip connections
+        self.decoder1 = nn.Sequential(
+            nn.Conv2d(256 + 128, 128, kernel_size=3, padding=1),  # Skip connection
             nn.ReLU(),
-            nn.BatchNorm2d(128),
-
-            # Second block
-            nn.Conv2d(128, 64, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.BatchNorm2d(64),
-
-            # Final reconstruction layer
-            nn.Conv2d(64, self.num_wavelengths, kernel_size=3, padding=1)
+            nn.BatchNorm2d(128)
         )
 
-        # Initialize weights
+        self.decoder2 = nn.Sequential(
+            nn.Conv2d(128 + 64, 64, kernel_size=3, padding=1),  # Skip connection
+            nn.ReLU(),
+            nn.BatchNorm2d(64)
+        )
+
+        self.final_layer = nn.Conv2d(64, self.num_wavelengths, kernel_size=3, padding=1)
+
         self._initialize_weights()
 
     def _initialize_weights(self):
@@ -60,23 +58,27 @@ class FullImageHyperspectralNet(nn.Module):
 
     def forward(self, x):
         """
-        Forward pass of the network.
+        Forward pass with skip connections.
         Args:
             x: Input tensor of shape (batch_size, 1, height, width)
         Returns:
-            Reconstructed hyperspectral image of shape (batch_size, num_wavelengths, height, width)
+            Reconstructed hyperspectral image (batch_size, num_wavelengths, height, width)
         """
-        # Encoder path
-        x = self.encoder(x)
+        # Encoder forward pass
+        e1 = self.encoder1(x)  # First feature map
+        e2 = self.encoder2(e1)  # Second feature map
+        e3 = self.encoder3(e2)  # Third feature map (latent representation)
 
-        # Decoder path
-        x = self.decoder(x)
+        # Decoder with skip connections
+        d1 = self.decoder1(torch.cat([e3, e2], dim=1))  # Concatenating skip connection from e2
+        d2 = self.decoder2(torch.cat([d1, e1], dim=1))  # Concatenating skip connection from e1
+
+        x = self.final_layer(d2)  # Output reconstruction
 
         # Apply non-negativity constraint
         x = torch.relu(x)
 
-        # Normalize the output while maintaining relative spectral relationships
-        # Add small epsilon to prevent division by zero
+        # Normalize the output to maintain relative spectral relationships
         x_max = x.max(dim=1, keepdim=True)[0].max(dim=2, keepdim=True)[0].max(dim=3, keepdim=True)[0]
         x = x / (x_max + 1e-8)
 
@@ -84,18 +86,29 @@ class FullImageHyperspectralNet(nn.Module):
 
     def compute_loss(self, outputs, targets, criterion):
         """
-        Compute the loss between outputs and targets.
+        Compute total loss including reconstruction, spectral smoothness, and spatial consistency.
+
         Args:
             outputs: Predicted hyperspectral images
             targets: Ground truth hyperspectral images
-            criterion: Loss function
+            criterion: Reconstruction loss function (e.g., MSELoss)
+
         Returns:
             Total loss value
         """
-        # Reconstruction loss
+        # Reconstruction loss (Mean Squared Error)
         recon_loss = criterion(outputs, targets)
 
-        # You could add additional loss terms here if needed
-        # For example: spectral smoothness, spatial consistency, etc.
+        # Spectral Smoothness Loss: Penalizes large spectral variations
+        spectral_diff = outputs[:, 1:, :, :] - outputs[:, :-1, :, :]
+        spectral_smoothness_loss = torch.mean(spectral_diff ** 2)
 
-        return recon_loss
+        # Spatial Consistency Loss: Encourages smooth changes between adjacent pixels
+        dx = outputs[:, :, 1:, :] - outputs[:, :, :-1, :]
+        dy = outputs[:, :, :, 1:] - outputs[:, :, :, :-1]
+        spatial_consistency_loss = torch.mean(dx ** 2) + torch.mean(dy ** 2)
+
+        # Weighted Sum of Losses
+        total_loss = recon_loss + 0.1 * spatial_consistency_loss # + 0.1 * spectral_smoothness_loss
+
+        return total_loss
