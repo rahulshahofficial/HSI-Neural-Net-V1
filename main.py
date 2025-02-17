@@ -203,4 +203,4 @@ def main(num_images=None):
         raise
 
 if __name__ == "__main__":
-    main(num_images=10)  # Process first 10 images
+    main(num_images=100)  # Process first 10 images

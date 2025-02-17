@@ -176,10 +176,10 @@ class Trainer:
             # Save regular checkpoint every 10 epochs
             if (epoch + 1) % 10 == 0:
                 self.save_checkpoint(epoch + 1, val_loss if self.val_loader else train_loss)
-                self.plot_losses()
 
         print("Training completed!")
         self.plot_losses()
+
         os.makedirs(os.path.dirname(config.model_save_path), exist_ok=True)
         torch.save(self.model.state_dict(), config.model_save_path)
         print(f"Model saved to {config.model_save_path}")
