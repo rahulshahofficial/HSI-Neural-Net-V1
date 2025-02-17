@@ -2,44 +2,100 @@ import torch
 import torch.nn as nn
 from config import config
 
-class HyperspectralNet(nn.Module):
+class FullImageHyperspectralNet(nn.Module):
     def __init__(self):
-        super(HyperspectralNet, self).__init__() # Ensures that the class inherits the functionalities of nn.Module
+        super(FullImageHyperspectralNet, self).__init__()
 
-        # Input: [batch_size, no of inputs (1 intensity measurement per filter), patch(superpixel) height, patch(superpixel) width]
+        # Define network parameters
+        self.input_channels = 1  # Single channel input (intensity measurements)
+        self.num_wavelengths = config.num_wavelengths
+
+        # Encoder path with larger receptive field
         self.encoder = nn.Sequential(
-            nn.Conv2d(1, 128, kernel_size=3, padding=1), # Superpixel size 8 x 8
+            # First block
+            nn.Conv2d(self.input_channels, 64, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(64),
+
+            # Second block
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.BatchNorm2d(128),
 
+            # Third block
             nn.Conv2d(128, 256, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.BatchNorm2d(256)
         )
 
-        # Decoder to reconstruct spectral information
+        # Decoder path with skip connections
         self.decoder = nn.Sequential(
+            # First block
             nn.Conv2d(256, 128, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.BatchNorm2d(128),
-            nn.Conv2d(128, 9, kernel_size=3, padding=1)  # 10 (800-900nm) + 9 (1100-1700nm)
+
+            # Second block
+            nn.Conv2d(128, 64, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(64),
+
+            # Final reconstruction layer
+            nn.Conv2d(64, self.num_wavelengths, kernel_size=3, padding=1)
         )
 
-    def forward(self, x):
-        x = self.encoder(x)
-        x = self.decoder(x)
-        # x = torch.clamp(x, 0.0, 1.0)
-        # x = x.squeeze(2)  # Remove extra dimensions
+        # Initialize weights
+        self._initialize_weights()
 
-        # First ensure non-negativity while preserving relative relationships
+    def _initialize_weights(self):
+        """Initialize network weights using Kaiming initialization."""
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+
+    def forward(self, x):
+        """
+        Forward pass of the network.
+        Args:
+            x: Input tensor of shape (batch_size, 1, height, width)
+        Returns:
+            Reconstructed hyperspectral image of shape (batch_size, num_wavelengths, height, width)
+        """
+        # Encoder path
+        x = self.encoder(x)
+
+        # Decoder path
+        x = self.decoder(x)
+
+        # Apply non-negativity constraint
         x = torch.relu(x)
 
-        # Global normalization to maintain relative intensities
-        x_max = x.max()
-        if x_max > 0:
-            x = x / (x_max + 1e-8)
+        # Normalize the output while maintaining relative spectral relationships
+        # Add small epsilon to prevent division by zero
+        x_max = x.max(dim=1, keepdim=True)[0].max(dim=2, keepdim=True)[0].max(dim=3, keepdim=True)[0]
+        x = x / (x_max + 1e-8)
 
         return x
 
-    def add_spectral_constraint(self, output):
-        return torch.clamp(output, min=0.0)
+    def compute_loss(self, outputs, targets, criterion):
+        """
+        Compute the loss between outputs and targets.
+        Args:
+            outputs: Predicted hyperspectral images
+            targets: Ground truth hyperspectral images
+            criterion: Loss function
+        Returns:
+            Total loss value
+        """
+        # Reconstruction loss
+        recon_loss = criterion(outputs, targets)
+
+        # You could add additional loss terms here if needed
+        # For example: spectral smoothness, spatial consistency, etc.
+
+        return recon_loss

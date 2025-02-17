@@ -1,21 +1,18 @@
-from config import config
-from network import HyperspectralNet
-from dataset import HyperspectralDataset
-from main import HyperspectralViewer
-from viewer import HyperspectralViewer
-
 import sys
 import time
 import cv2
+import numpy as np
+import torch
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QHBoxLayout, QComboBox, QPushButton, QLabel, QSlider, QLineEdit)
 from PyQt5.QtCore import Qt
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-import torch
-from torch.utils.data import DataLoader
 import os
-import numpy as np
+
+from config import config
+from network import FullImageHyperspectralNet
+from dataset import FullImageHyperspectralDataset
 
 class ReconstructionViewer(QMainWindow):
     def __init__(self):
@@ -73,6 +70,7 @@ class ReconstructionViewer(QMainWindow):
         self.y_coord.setFixedWidth(50)
         control_layout.addWidget(self.y_coord)
 
+        # Add plot spectrum button
         self.plot_spectrum_btn = QPushButton("Plot Spectrum")
         self.plot_spectrum_btn.clicked.connect(self.plot_coordinates)
         control_layout.addWidget(self.plot_spectrum_btn)
@@ -100,186 +98,38 @@ class ReconstructionViewer(QMainWindow):
         self.canvas.mpl_connect('button_press_event', self.on_click)
 
         # Load the trained model
-        self.model = HyperspectralNet()
-        self.model.load_state_dict(torch.load(config.model_save_path, weights_only=True))
+        self.model = FullImageHyperspectralNet()
+        self.model.load_state_dict(torch.load(config.model_save_path, map_location='cpu'))
         self.model.eval()
 
-    def plot_coordinates(self):
-        """Plot spectrum for manually entered coordinates."""
-        try:
-            x = int(self.x_coord.text())
-            y = int(self.y_coord.text())
-
-            if (0 <= x < self.original_image.shape[1] and
-                0 <= y < self.original_image.shape[0]):
-                self.ax_spectrum.clear()
-
-                self.ax_spectrum.plot(self.wavelengths,
-                                    self.original_image[y,x,:],
-                                    'b-', label='Original')
-                self.ax_spectrum.plot(self.wavelengths,
-                                    self.full_reconstruction[y,x,:].numpy(),
-                                    'r--', label='Reconstructed')
-
-                self.ax_spectrum.set_xlabel('Wavelength (nm)')
-                self.ax_spectrum.set_ylabel('Intensity')
-                self.ax_spectrum.set_title(f'Spectrum at ({x}, {y})')
-                self.ax_spectrum.legend()
-                self.ax_spectrum.grid(True)
-                plt.ylim(0,1)
-
-                self.canvas.draw()
-            else:
-                print("Coordinates out of range")
-        except ValueError:
-            print("Invalid coordinates")
-
     def _get_available_files(self):
-        """Get list of files common to both VNIR and SWIR directories."""
-        vnir_path = os.path.join(config.dataset_path, "VNIR_RAW")
+        """Get list of files from SWIR directory."""
         swir_path = os.path.join(config.dataset_path, "SWIR_RAW")
-
-        vnir_files = {f.replace('.npy', '') for f in os.listdir(vnir_path)
-                     if f.endswith('.npy')}
-        swir_files = {f.replace('.npy', '') for f in os.listdir(swir_path)
-                     if f.endswith('.npy')}
-
-        return sorted(list(vnir_files.intersection(swir_files)))
-
-    def update_wavelength_display(self):
-        """Update display when wavelength slider changes."""
-        if self.wavelengths is not None:
-            wavelength = self.wavelengths[self.wavelength_slider.value()]
-            self.wavelength_label.setText(f"Wavelength: {wavelength:.2f} nm")
-            self.update_images()
-
-    def update_images(self):
-        """Update image display for current wavelength."""
-        if self.original_image is None or self.full_reconstruction is None:
-            return
-
-        idx = self.wavelength_slider.value()
-        wavelength = self.wavelengths[idx]
-
-        self.ax_orig.clear()
-        self.ax_recon.clear()
-
-        # Get the images for current wavelength
-        orig_img = self.original_image[:,:,idx]
-        recon_img = self.full_reconstruction[:,:,idx].numpy()
-
-        # Print statistics for debugging
-        print(f"\nDisplaying wavelength {wavelength:.1f}nm (index {idx})")
-        print("Original image stats:")
-        print(f"Min: {orig_img.min():.8f}")
-        print(f"Max: {orig_img.max():.8f}")
-        print(f"Mean: {orig_img.mean():.8f}")
-        print("\nReconstructed image stats:")
-        print(f"Min: {recon_img.min():.8f}")
-        print(f"Max: {recon_img.max():.8f}")
-        print(f"Mean: {recon_img.mean():.8f}")
-
-        # Try different normalization for display
-        if wavelength <= 900:  # VNIR band
-            print("\nApplying VNIR display scaling")
-            recon_img_norm = (recon_img - recon_img.min()) / (recon_img.max() - recon_img.min() + 1e-8)
-            orig_img_norm = (orig_img - orig_img.min()) / (orig_img.max() - orig_img.min() + 1e-8)
-
-            self.ax_orig.imshow(orig_img_norm, cmap='viridis')
-            self.ax_recon.imshow(recon_img_norm, cmap='viridis')
-        else:  # SWIR band
-            print("\nApplying SWIR display scaling")
-            self.ax_orig.imshow(orig_img, cmap='viridis')
-            self.ax_recon.imshow(recon_img, cmap='viridis')
-
-        self.ax_orig.set_title(f'Original Image ({wavelength:.1f}nm)')
-        self.ax_recon.set_title(f'Reconstructed Image ({wavelength:.1f}nm)')
-        self.ax_orig.axis('off')
-        self.ax_recon.axis('off')
-
-        self.canvas.draw()
-
-    def on_click(self, event):
-        """Handle click events to show spectrum at clicked point."""
-        if event.inaxes in [self.ax_orig, self.ax_recon]:
-            x, y = int(event.xdata), int(event.ydata)
-
-            if 0 <= x < self.original_image.shape[1] and 0 <= y < self.original_image.shape[0]:
-                self.ax_spectrum.clear()
-
-                # Plot original spectrum
-                self.ax_spectrum.plot(self.wavelengths,
-                                    self.original_image[y,x,:],
-                                    'b-', label='Original')
-
-                # Plot reconstructed spectrum
-                self.ax_spectrum.plot(self.wavelengths,
-                                    self.full_reconstruction[y,x,:].numpy(),
-                                    'r--', label='Reconstructed')
-
-                self.ax_spectrum.set_xlabel('Wavelength (nm)')
-                self.ax_spectrum.set_ylabel('Intensity')
-                self.ax_spectrum.set_title(f'Spectrum at ({x}, {y})')
-                self.ax_spectrum.legend()
-                self.ax_spectrum.grid(True)
-                plt.ylim(0,1)
-                self.canvas.draw()
+        return sorted([f.replace('.npy', '') for f in os.listdir(swir_path)
+                      if f.endswith('.npy')])
 
     def reconstruct_image(self):
         """Reconstruct the selected image."""
         start_time = time.time()
-
         selected_file = self.file_combo.currentText()
 
-        # Direct data loading
-        swir_cube = np.load(os.path.join(config.dataset_path, "SWIR_RAW", f"{selected_file}.npy"))
+        # Load SWIR data
+        swir_file = os.path.join(config.dataset_path, "SWIR_RAW", f"{selected_file}.npy")
+        swir_cube = np.load(swir_file).reshape((1, 168, 211, 9))  # Add batch dimension
 
+        # Create dataset with single image
+        dataset = FullImageHyperspectralDataset(swir_cube)
+        filtered_measurements, original_spectrum = dataset[0]
 
-        # Reshape SWIR
-        swir_cube = swir_cube.reshape((168, 211, 9))
-
-
-
-        # Pad dimensions to be multiples of superpixel_size
-        h, w, wavelengths = swir_cube.shape
-        pad_h = (config.superpixel_size - (h % config.superpixel_size)) % config.superpixel_size
-        pad_w = (config.superpixel_size - (w % config.superpixel_size)) % config.superpixel_size
-
-        padded_cube = np.zeros((h + pad_h, w + pad_w, wavelengths))
-        padded_cube[:h, :w, :] = swir_cube
-
-        # Store data
-        self.original_image = padded_cube / np.max(padded_cube)
+        # Store wavelengths and original image
         self.wavelengths = np.linspace(1100, 1700, 9)
+        self.original_image = original_spectrum.numpy()
 
-        # Create dataset
-        dataset = HyperspectralDataset(padded_cube)
-        test_loader = DataLoader(dataset, batch_size=64)
-
-        # Run reconstruction
-        reconstructed_patches = []
-        h, w, _ = padded_cube.shape
-        superpixel_size = dataset.superpixel_size
-
+        # Perform reconstruction
         with torch.no_grad():
-            for filtered_measurements, _ in test_loader:
-                filtered_measurements = filtered_measurements
-                outputs = self.model(filtered_measurements)
-                reconstructed_patches.append(outputs)
-
-        # Reshape reconstructions back into image
-        reconstructed_patches = torch.cat(reconstructed_patches, dim=0)
-        patches_per_row = w // superpixel_size
-
-        # Initialize full reconstruction array
-        self.full_reconstruction = torch.zeros((h, w, 9), dtype=torch.float32)
-
-        # Place patches back into image
-        for idx in range(len(reconstructed_patches)):
-            i = (idx // patches_per_row) * superpixel_size
-            j = (idx % patches_per_row) * superpixel_size
-            self.full_reconstruction[i:i+superpixel_size, j:j+superpixel_size, :] = \
-                reconstructed_patches[idx].permute(1, 2, 0)
+            filtered_measurements = filtered_measurements.unsqueeze(0)  # Add batch dimension
+            reconstructed = self.model(filtered_measurements)
+            self.full_reconstruction = reconstructed.squeeze(0)  # Remove batch dimension
 
         # Calculate RMSE
         mse = torch.mean((self.full_reconstruction - torch.tensor(self.original_image)) ** 2)
@@ -292,6 +142,69 @@ class ReconstructionViewer(QMainWindow):
 
         # Update display
         self.update_wavelength_display()
+
+    def update_wavelength_display(self):
+        """Update display when wavelength slider changes."""
+        if self.wavelengths is None or self.original_image is None:
+            return
+
+        idx = self.wavelength_slider.value()
+        wavelength = self.wavelengths[idx]
+        self.wavelength_label.setText(f"Wavelength: {wavelength:.2f} nm")
+
+        # Update images
+        self.ax_orig.clear()
+        self.ax_recon.clear()
+
+        orig_img = self.original_image[idx]
+        recon_img = self.full_reconstruction[idx].numpy()
+
+        self.ax_orig.imshow(orig_img, cmap='viridis')
+        self.ax_recon.imshow(recon_img, cmap='viridis')
+
+        self.ax_orig.set_title(f'Original Image ({wavelength:.1f}nm)')
+        self.ax_recon.set_title(f'Reconstructed Image ({wavelength:.1f}nm)')
+        self.ax_orig.axis('off')
+        self.ax_recon.axis('off')
+
+        self.canvas.draw()
+
+    def plot_coordinates(self):
+        """Plot spectrum for manually entered coordinates."""
+        try:
+            x = int(self.x_coord.text())
+            y = int(self.y_coord.text())
+            self.plot_spectrum(x, y)
+        except ValueError:
+            print("Invalid coordinates")
+
+    def plot_spectrum(self, x, y):
+        """Plot spectrum for given coordinates."""
+        if 0 <= y < self.original_image.shape[1] and 0 <= x < self.original_image.shape[2]:
+            self.ax_spectrum.clear()
+
+            # Plot original and reconstructed spectra
+            self.ax_spectrum.plot(self.wavelengths,
+                                self.original_image[:, y, x],
+                                'b-', label='Original')
+            self.ax_spectrum.plot(self.wavelengths,
+                                self.full_reconstruction[:, y, x].numpy(),
+                                'r--', label='Reconstructed')
+
+            self.ax_spectrum.set_xlabel('Wavelength (nm)')
+            self.ax_spectrum.set_ylabel('Intensity')
+            self.ax_spectrum.set_title(f'Spectrum at ({x}, {y})')
+            self.ax_spectrum.legend()
+            self.ax_spectrum.grid(True)
+            plt.ylim(0, 1)
+
+            self.canvas.draw()
+
+    def on_click(self, event):
+        """Handle click events to show spectrum at clicked point."""
+        if event.inaxes in [self.ax_orig, self.ax_recon]:
+            x, y = int(event.xdata), int(event.ydata)
+            self.plot_spectrum(x, y)
 
 def main():
     app = QApplication(sys.argv)

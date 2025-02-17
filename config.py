@@ -28,9 +28,10 @@ class Config:
         self.batch_size = 64
         self.num_epochs = 100
         self.learning_rate = 1e-4
-        self.num_filters = 9
+        self.num_filters = 6
         # self.num_filters = 16
-        self.superpixel_size = 3 # Change superpixel size here
+        self.superpixel_height = 2
+        self.superpixel_width = 3  # Change superpixel size here
         # self.superpixel_size = 4 # Change superpixel size here
         self.conv_channels = [1, 128, 256]  # 3D Conv channels
         self.num_wavelengths = 9
@@ -47,9 +48,9 @@ class Config:
         # self.superpixel_size = 8 # Change superpixel size here
         # self.model_save_path = 'models/013125_hyperspectral_model_800to1700.pth'
 
-        self.num_filters = 9
-        self.superpixel_size = 3
-        self.model_save_path = 'models/020425_hyperspectral_model_800to1700_9filters_2.pth'
-        self.results_path = 'results'
+        self.num_filters = 6
+        # self.superpixel_size = 3
+        self.model_save_path = 'models/021725_hyperspectral_model_9filters_FULLIMAGE.pth'
+        self.results_path = 'results/021725'
 
 config = Config()
