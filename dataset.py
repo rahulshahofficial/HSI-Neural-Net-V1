@@ -187,7 +187,7 @@ class FullImageHyperspectralDataset(Dataset):
         # Plot repeated pattern
         plt.subplot(122)
         plt.imshow(full_pattern, cmap='viridis')
-        plt.title(f'Repeated Pattern ({num_repeats}x{num_repeats} superpixels)')
+        plt.title(f'Repeated Pattern ({num_repeats_h}x{num_repeats_w} superpixels)')
         plt.colorbar(label='Filter Index')
 
         # Add grid to show superpixel boundaries
