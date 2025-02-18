@@ -168,14 +168,6 @@ class Trainer:
                 self.val_losses.append(val_loss)
                 print(f"Validation Loss: {val_loss:.6f}")
 
-                # Save checkpoint if this is the best model
-                if val_loss < self.best_val_loss:
-                    self.best_val_loss = val_loss
-                    self.save_checkpoint(epoch + 1, val_loss, is_best=True)
-
-            # Save regular checkpoint every 10 epochs
-            if (epoch + 1) % 10 == 0:
-                self.save_checkpoint(epoch + 1, val_loss if self.val_loader else train_loss)
 
         print("Training completed!")
         self.plot_losses()
