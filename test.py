@@ -1,6 +1,5 @@
 import sys
 import time
-import cv2
 import numpy as np
 import torch
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
@@ -9,6 +8,7 @@ from PyQt5.QtCore import Qt
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import os
+import rasterio
 
 from config import config
 from network import FullImageHyperspectralNet
@@ -17,7 +17,7 @@ from dataset import FullImageHyperspectralDataset
 class ReconstructionViewer(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('Hyperspectral Reconstruction Viewer')
+        self.setWindowTitle('AVIRIS HSI Reconstruction Viewer')
         self.setGeometry(100, 100, 1600, 900)
 
         # Initialize variables
@@ -25,6 +25,7 @@ class ReconstructionViewer(QMainWindow):
         self.original_image = None
         self.wavelengths = None
         self.current_wavelength_idx = None
+        self.data_dir = "/Volumes/ValentineLab-1/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset"
 
         # Create main widget and layout
         main_widget = QWidget()
@@ -48,9 +49,9 @@ class ReconstructionViewer(QMainWindow):
 
         # Add wavelength slider
         self.wavelength_slider = QSlider(Qt.Horizontal)
-        self.wavelength_slider.setMinimum(0)
-        self.wavelength_slider.setMaximum(8)  # 9 wavelengths - 1
-        self.wavelength_slider.setValue(4)  # Middle wavelength
+        self.wavelength_slider.setMinimum(800)
+        self.wavelength_slider.setMaximum(1700)
+        self.wavelength_slider.setValue(1250)
         self.wavelength_slider.valueChanged.connect(self.update_wavelength_display)
         control_layout.addWidget(QLabel("Wavelength:"))
         control_layout.addWidget(self.wavelength_slider)
@@ -103,33 +104,33 @@ class ReconstructionViewer(QMainWindow):
         self.model.eval()
 
     def _get_available_files(self):
-        """Get list of files from SWIR directory."""
-        swir_path = os.path.join(config.dataset_path, "SWIR_RAW")
-        return sorted([f.replace('.npy', '') for f in os.listdir(swir_path)
-                      if f.endswith('.npy')])
+        """Get list of files from augmented dataset directory."""
+        return sorted([f for f in os.listdir(self.data_dir) if f.endswith('.tif')])
 
     def reconstruct_image(self):
         """Reconstruct the selected image."""
         start_time = time.time()
         selected_file = self.file_combo.currentText()
 
-        # Load SWIR data
-        swir_file = os.path.join(config.dataset_path, "SWIR_RAW", f"{selected_file}.npy")
-        swir_cube = np.load(swir_file).reshape((1, 168, 211, 9))  # Add batch dimension
+        # Load hyperspectral data
+        with rasterio.open(os.path.join(self.data_dir, selected_file)) as src:
+            img_data = src.read()
+            img_data = np.transpose(img_data, (1, 2, 0))  # Change to (H,W,C)
+            img_data = img_data.reshape((1, *img_data.shape))  # Add batch dimension
 
         # Create dataset with single image
-        dataset = FullImageHyperspectralDataset(swir_cube)
+        dataset = FullImageHyperspectralDataset(img_data)
         filtered_measurements, original_spectrum = dataset[0]
 
         # Store wavelengths and original image
-        self.wavelengths = np.linspace(1100, 1700, 9)
+        self.wavelengths = config.full_wavelengths[config.wavelength_indices]
         self.original_image = original_spectrum.numpy()
 
         # Perform reconstruction
         with torch.no_grad():
-            filtered_measurements = filtered_measurements.unsqueeze(0)  # Add batch dimension
+            filtered_measurements = filtered_measurements.unsqueeze(0)
             reconstructed = self.model(filtered_measurements)
-            self.full_reconstruction = reconstructed.squeeze(0)  # Remove batch dimension
+            self.full_reconstruction = reconstructed.squeeze(0)
 
         # Calculate RMSE
         mse = torch.mean((self.full_reconstruction - torch.tensor(self.original_image)) ** 2)

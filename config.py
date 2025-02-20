@@ -1,5 +1,7 @@
 import os
 import platform
+import numpy as np
+
 
 class Config:
     def __init__(self):
@@ -11,18 +13,11 @@ class Config:
 
         # Dataset paths
         self.dataset_path = os.path.join(self.base_path, 'HSI Data Sets',
-                                       'HyperDrive_4wheelbuggyCapturedImages_SWIR')
+                                       'AVIRIS_augmented_dataset')
 
         # Filter paths
         self.filter_path = os.path.join(self.base_path, 'Machine Learning Codes',
                                       'Filter CSV files', 'TransmissionTable_NIR.csv')
-
-        # Calibration paths
-        self.vnir_homography = os.path.join(self.dataset_path, 'calibration',
-                                          'ximea_to_rgb_homography.txt')
-        self.swir_homography = os.path.join(self.dataset_path, 'calibration',
-                                          'imec_to_rgb_homography.txt')
-        self.rgb_path = os.path.join(self.dataset_path, "RGB_RAW")
 
         # Model parameters
         self.batch_size = 64
@@ -33,15 +28,24 @@ class Config:
         self.superpixel_height = 2
         self.superpixel_width = 3  # Change superpixel size here
         # self.superpixel_size = 4 # Change superpixel size here
-        self.conv_channels = [1, 128, 256]  # 3D Conv channels
-        self.num_wavelengths = 9
-        self.input_channels = 1  # New parameter to make it clear we have 1 input channel
-        self.kernel_size = 3           # Make convolution kernel size configurable
-        self.padding = 1              # Make padding configurable
-        self.use_batch_norm = True    # Control batch normalization
 
-        # Wavelength parameters
-        self.swir_wavelengths = (1100, 1700, 9)  # start, end, points
+        # Modified parameters for AVIRIS dataset
+        self.image_height = 100  # For our cropped images
+        self.image_width = 100
+        self.num_wavelengths = 220  # AVIRIS has 220 bands
+        self.wavelength_range = (800, 1700)  # nm, matching filter range
+        # Generate full wavelength range
+        self.full_wavelengths = np.linspace(400, 2500, 220)
+        # Create mask for 800-1700nm range
+        mask = (self.full_wavelengths >= 800) & (self.full_wavelengths <= 1700)
+        self.wavelength_indices = np.where(mask)[0]
+        self.num_output_wavelengths = len(self.wavelength_indices)
+        self.input_channels = 1
+        self.kernel_size = 3
+        self.padding = 1
+        self.use_batch_norm = True
+
+        self.conv_channels = [1, 128, 256]  # 3D Conv channels
 
         # Output paths
         # self.num_filters = 64
@@ -50,7 +54,7 @@ class Config:
 
         self.num_filters = 6
         # self.superpixel_size = 3
-        self.model_save_path = 'models/021725_hyperspectral_model_6filters_FULLIMAGE_v2.pth'
-        self.results_path = 'results/021725'
+        self.model_save_path = 'models/021925_AVIRIS_6filters_FULLIMAGE.pth'
+        self.results_path = 'results/021925'
 
 config = Config()

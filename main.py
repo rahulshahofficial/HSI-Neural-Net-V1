@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
+import rasterio
 
 from config import config
 from dataset import FullImageHyperspectralDataset
@@ -15,51 +16,45 @@ class HyperspectralProcessor:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Using device: {self.device}")
 
-    @staticmethod
-    def get_all_files():
-        """Get all available hyperspectral data files."""
-        swir_path = os.path.join(config.dataset_path, "SWIR_RAW")
-        return {
-            'files': sorted([f.replace('.npy', '') for f in os.listdir(swir_path)
-                           if f.endswith('.npy')]),
-            'swir_path': swir_path
-        }
+    def load_data(self, num_images=None):
+        """Load pre-generated augmented dataset"""
+        data_dir = "/Volumes/ValentineLab-1/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset"
+        files = sorted([f for f in os.listdir(data_dir) if f.endswith('.tif')])
 
-    @staticmethod
-    def load_data(num_images=None):
-        """Load and preprocess hyperspectral data."""
-        paths = HyperspectralProcessor.get_all_files()
-        combined_data = []
 
-        files_to_process = paths['files'][:num_images] if num_images else paths['files']
+        if num_images and num_images < len(files):
+            files = files[:num_images]
 
-        print(f"Will process {len(files_to_process)} images")
-        for filename in files_to_process:
-            print(f"Loading file: {filename}")
-            swir_file = os.path.join(paths['swir_path'], f"{filename}.npy")
+        all_data = []
+        print(f"Loading {len(files)} augmented images...")
 
+        for file in files:
             try:
-                # Load and reshape SWIR data
-                swir_data = np.load(swir_file)
-                swir_data = swir_data.reshape((168, 211, 9))  # Known dimensions
-                combined_data.append(swir_data)
+                with rasterio.open(os.path.join(data_dir, file)) as src:
+                    # Read and transpose to (H,W,C) format
+                    data = src.read()  # Shape: (C,H,W)
+                    data = np.transpose(data, (1, 2, 0))  # Shape: (H,W,C)
+                    all_data.append(data)
+
+                if len(all_data) % 50 == 0:
+                    print(f"Loaded {len(all_data)} images")
+
             except Exception as e:
-                print(f"Error loading {filename}: {str(e)}")
+                print(f"Error loading {file}: {str(e)}")
                 continue
 
-        if not combined_data:
+        if not all_data:
             raise ValueError("No data could be loaded")
 
-        return np.stack(combined_data)
+        return np.stack(all_data)
 
     def prepare_datasets(self, data):
         """Prepare training, validation, and test datasets."""
-        total_samples = data.shape[0]  # Number of images
+        total_samples = data.shape[0]
         train_size = int(0.8 * total_samples)
         val_size = int(0.1 * total_samples)
-        test_size = total_samples - train_size - val_size
 
-        # Split along first dimension (num_images)
+        # Split data
         train_data = data[:train_size]
         val_data = data[train_size:train_size+val_size]
         test_data = data[train_size+val_size:]
@@ -78,18 +73,15 @@ class HyperspectralProcessor:
         val_dataset = FullImageHyperspectralDataset(val_data)
         test_dataset = FullImageHyperspectralDataset(test_data)
 
-        # Visualize filter pattern and transmissions
+        # Visualize filter patterns
         print("\nVisualizing filter arrangements...")
         train_dataset.visualize_filter_pattern(num_repeats=3)
         train_dataset.visualize_filter_transmissions()
 
-        print("\nCreating data loaders...")
+        # Create data loaders
         train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
         test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
-
-        print(f"\nBatch size for training: {config.batch_size}")
-        print(f"Number of training batches per epoch: {len(train_loader)}")
 
         return train_loader, val_loader, test_loader
 
@@ -99,20 +91,18 @@ class HyperspectralProcessor:
         model.eval()
 
         with torch.no_grad():
-            # Get first test sample
             filtered_measurements, original_spectrum = next(iter(test_loader))
             filtered_measurements = filtered_measurements.to(self.device)
             original_spectrum = original_spectrum.to(self.device)
 
-            # Generate reconstruction
             reconstructed_spectrum = model(filtered_measurements)
 
             # Move to CPU for plotting
             original_spectrum = original_spectrum.cpu().numpy()[0]
             reconstructed_spectrum = reconstructed_spectrum.cpu().numpy()[0]
 
-            # Plot results
-            wavelengths = np.linspace(1100, 1700, 9)
+            # Plot results for wavelengths in range (800-1700nm)
+            wavelengths = config.full_wavelengths[config.wavelength_indices]
 
             # Plot central pixel spectrum
             h, w = original_spectrum.shape[1:]
@@ -131,22 +121,23 @@ class HyperspectralProcessor:
             plt.savefig(os.path.join(save_dir, f'reconstruction_{timestamp}.png'))
             plt.close()
 
-            # Plot full image comparison
-            wavelength_idx = 4  # Middle wavelength
-            plt.figure(figsize=(15, 5))
+            # Plot full image comparison at middle wavelength
+            middle_idx = len(wavelengths) // 2
+            middle_wavelength = wavelengths[middle_idx]
 
+            plt.figure(figsize=(15, 5))
             plt.subplot(131)
-            plt.imshow(original_spectrum[wavelength_idx], cmap='viridis')
-            plt.title('Original')
+            plt.imshow(original_spectrum[middle_idx], cmap='viridis')
+            plt.title(f'Original at {middle_wavelength:.0f}nm')
             plt.colorbar()
 
             plt.subplot(132)
-            plt.imshow(reconstructed_spectrum[wavelength_idx], cmap='viridis')
-            plt.title('Reconstructed')
+            plt.imshow(reconstructed_spectrum[middle_idx], cmap='viridis')
+            plt.title(f'Reconstructed at {middle_wavelength:.0f}nm')
             plt.colorbar()
 
             plt.subplot(133)
-            difference = np.abs(original_spectrum[wavelength_idx] - reconstructed_spectrum[wavelength_idx])
+            difference = np.abs(original_spectrum[middle_idx] - reconstructed_spectrum[middle_idx])
             plt.imshow(difference, cmap='viridis')
             plt.title('Absolute Difference')
             plt.colorbar()
@@ -155,8 +146,11 @@ class HyperspectralProcessor:
             plt.savefig(os.path.join(save_dir, f'fullimage_comparison_{timestamp}.png'))
             plt.close()
 
-def main(num_images=None):
+def main():
     """Main training and evaluation pipeline."""
+    num_images = 5
+    augmented_data_dir = "/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset/"
+
     print("Starting Hyperspectral Neural Network Training Pipeline...")
     print(f"\nConfiguration:")
     print(f"Number of filters: {config.num_filters}")
@@ -166,29 +160,23 @@ def main(num_images=None):
     print(f"Batch size: {config.batch_size}")
 
     try:
-        # Initialize processor
         processor = HyperspectralProcessor()
 
-        # Load and prepare data
-        print("\nLoading hyperspectral data...")
-        all_data = processor.load_data(num_images)
+        print("\nLoading augmented dataset...")
+        all_data = processor.load_data(augmented_data_dir)
 
         print("\nPreparing datasets...")
         train_loader, val_loader, test_loader = processor.prepare_datasets(all_data)
 
-        # Initialize model
         print("\nInitializing model...")
         model = FullImageHyperspectralNet()
         print(f"Model architecture:\n{model}")
 
-        # Initialize trainer
         trainer = Trainer(model, train_loader, val_loader)
 
-        # Train model
         print("\nStarting training...")
         trainer.train()
 
-        # Evaluate and visualize results
         print("\nEvaluating model...")
         test_loss, outputs, targets = trainer.evaluate_model(test_loader)
         print(f"Final test loss: {test_loss:.6f}")
@@ -203,4 +191,4 @@ def main(num_images=None):
         raise
 
 if __name__ == "__main__":
-    main(num_images=100)  # Process first 10 images
+    main()

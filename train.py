@@ -46,21 +46,17 @@ class Trainer:
             # Forward pass
             self.optimizer.zero_grad()
             outputs = self.model(filtered_measurements)
-            loss = self.criterion(outputs, spectra)
+
+            # Calculate loss using model's compute_loss function
+            loss = self.model.compute_loss(outputs, spectra, self.criterion)
 
             # Backward pass
             loss.backward()
-
-            # Gradient clipping to prevent exploding gradients
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-
-            # Update weights
             self.optimizer.step()
 
-            # Accumulate loss
             epoch_loss += loss.item()
 
-            # Print progress
             if (batch_idx + 1) % 10 == 0:
                 print(f'Batch [{batch_idx + 1}/{num_batches}], Loss: {loss.item():.6f}')
 
@@ -80,42 +76,76 @@ class Trainer:
                 spectra = spectra.to(self.device)
 
                 outputs = self.model(filtered_measurements)
-                loss = self.criterion(outputs, spectra)
+                # Use model's compute_loss for consistency
+                loss = self.model.compute_loss(outputs, spectra, self.criterion)
                 val_loss += loss.item()
 
         return val_loss / len(self.val_loader)
 
-    def save_checkpoint(self, epoch, val_loss, is_best=False):
-        """Save model checkpoint."""
-        checkpoint = {
-            'epoch': epoch,
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'val_loss': val_loss,
-            'train_losses': self.train_losses,
-            'val_losses': self.val_losses
-        }
+    def train(self, num_epochs=None, resume_from=None):
+        """
+        Full training loop.
+        Args:
+            num_epochs: Number of epochs to train for (default: from config)
+            resume_from: Path to checkpoint to resume training from
+        """
+        if num_epochs is None:
+            num_epochs = config.num_epochs
 
-        # Save regular checkpoint
-        os.makedirs('checkpoints', exist_ok=True)
-        checkpoint_path = f'checkpoints/checkpoint_epoch_{epoch}.pth'
-        torch.save(checkpoint, checkpoint_path)
+        print(f"Training on {self.device}")
+        print(f"Training with {len(self.train_loader)} batches per epoch")
 
-        # Save best model if this is the best validation loss
-        if is_best:
-            best_model_path = 'checkpoints/best_model.pth'
-            torch.save(checkpoint, best_model_path)
-            print(f"New best model saved with validation loss: {val_loss:.6f}")
+        for epoch in range(num_epochs):
+            print(f"\nEpoch [{epoch + 1}/{num_epochs}]")
 
-    def load_checkpoint(self, checkpoint_path):
-        """Load model checkpoint."""
-        checkpoint = torch.load(checkpoint_path)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        start_epoch = checkpoint['epoch']
-        self.train_losses = checkpoint['train_losses']
-        self.val_losses = checkpoint['val_losses']
-        return start_epoch
+            # Training phase
+            train_loss = self.train_epoch()
+            self.train_losses.append(train_loss)
+            print(f"Training Loss: {train_loss:.6f}")
+
+            # Validation phase
+            if self.val_loader is not None:
+                val_loss = self.validate()
+                self.val_losses.append(val_loss)
+                print(f"Validation Loss: {val_loss:.6f}")
+
+        print("Training completed!")
+        self.plot_losses()
+
+        os.makedirs(os.path.dirname(config.model_save_path), exist_ok=True)
+        torch.save(self.model.state_dict(), config.model_save_path)
+        print(f"Model saved to {config.model_save_path}")
+
+    def evaluate_model(self, test_loader):
+        """
+        Evaluate model on test data.
+        Args:
+            test_loader: DataLoader for test data
+        Returns:
+            Average test loss and reconstructed spectra
+        """
+        self.model.eval()
+        test_loss = 0.0
+        all_outputs = []
+        all_targets = []
+
+        with torch.no_grad():
+            for filtered_measurements, spectra in test_loader:
+                filtered_measurements = filtered_measurements.to(self.device)
+                spectra = spectra.to(self.device)
+
+                outputs = self.model(filtered_measurements)
+                loss = self.criterion(outputs, spectra)
+                test_loss += loss.item()
+
+                # Store outputs and targets for analysis
+                all_outputs.append(outputs.cpu())
+                all_targets.append(spectra.cpu())
+
+        avg_test_loss = test_loss / len(test_loader)
+        print(f"Average Test Loss: {avg_test_loss:.6f}")
+
+        return avg_test_loss, all_outputs, all_targets
 
     def plot_losses(self):
         """Plot training and validation losses."""
@@ -146,15 +176,10 @@ class Trainer:
         if num_epochs is None:
             num_epochs = config.num_epochs
 
-        start_epoch = 0
-        if resume_from:
-            start_epoch = self.load_checkpoint(resume_from)
-            print(f"Resuming training from epoch {start_epoch + 1}")
-
         print(f"Training on {self.device}")
         print(f"Training with {len(self.train_loader)} batches per epoch")
 
-        for epoch in range(start_epoch, num_epochs):
+        for epoch in range(num_epochs):
             print(f"\nEpoch [{epoch + 1}/{num_epochs}]")
 
             # Training phase
@@ -167,7 +192,6 @@ class Trainer:
                 val_loss = self.validate()
                 self.val_losses.append(val_loss)
                 print(f"Validation Loss: {val_loss:.6f}")
-
 
         print("Training completed!")
         self.plot_losses()

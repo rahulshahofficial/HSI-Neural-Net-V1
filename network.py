@@ -7,7 +7,7 @@ class FullImageHyperspectralNet(nn.Module):
         super(FullImageHyperspectralNet, self).__init__()
 
         self.input_channels = 1
-        self.num_wavelengths = config.num_wavelengths
+        self.num_wavelengths = config.num_output_wavelengths  # Only wavelengths in 800-1700nm range
 
         # Encoder with saved intermediate outputs for skip connections
         self.encoder1 = nn.Sequential(

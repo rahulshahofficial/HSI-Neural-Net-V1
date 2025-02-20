@@ -5,7 +5,6 @@ import pandas as pd
 from config import config
 import matplotlib.pyplot as plt
 
-
 class FullImageHyperspectralDataset(Dataset):
     def __init__(self, hyperspectral_cube):
         """
@@ -27,8 +26,6 @@ class FullImageHyperspectralDataset(Dataset):
             self.num_images = 1
             hyperspectral_cube = hyperspectral_cube.reshape(1, h, w, wavelengths)
 
-        self.num_wavelengths = wavelengths
-
         # Verify filter count doesn't exceed superpixel capacity
         max_filters = self.superpixel_height * self.superpixel_width
         if self.num_filters > max_filters:
@@ -48,57 +45,34 @@ class FullImageHyperspectralDataset(Dataset):
 
         # Normalize and convert to tensor
         hyperspectral_cube = hyperspectral_cube / np.max(hyperspectral_cube)
-        self.hypercube = torch.from_numpy(hyperspectral_cube).float()
+
+        # Extract relevant wavelengths using config indices
+        self.hypercube = torch.from_numpy(hyperspectral_cube[:, :, :, config.wavelength_indices]).float()
+        self.wavelengths = config.full_wavelengths[config.wavelength_indices]
+        self.num_wavelengths = len(self.wavelengths)
 
         # Load and prepare filter data
         self.load_filter_data()
 
     def load_filter_data(self):
         """Load and process filter data from CSV."""
-        # Read the CSV file
         self.filters = pd.read_csv(config.filter_path, header=None)
 
-        # Calculate the wavelength spacing in the original CSV
-        # 450 points span 800nm to 1700nm
-        num_wavelength_points = 450
-        csv_wavelengths = np.linspace(800, 1700, num_wavelength_points)
-        wavelength_spacing = (1700 - 800) / (num_wavelength_points - 1)
+        # Extract filter transmissions
+        filter_transmissions = self.filters.iloc[:self.num_filters, 1:].values
 
-        # Calculate indices for SWIR region (1100-1700nm)
-        swir_start_idx = int((1100 - 800) / wavelength_spacing)  # Index for 1100nm
-        swir_end_idx = num_wavelength_points  # Index for 1700nm
+        # CSV wavelengths (450 points from 800nm to 1700nm)
+        csv_wavelengths = np.linspace(800, 1700, filter_transmissions.shape[1])
 
-        # Extract filter transmissions for SWIR region
-        # Add 1 to indices because first column is filter names
-        filter_transmissions = self.filters.iloc[:self.num_filters,
-                                               swir_start_idx+1:swir_end_idx+1].values
-
-        # Get the actual wavelengths for our SWIR measurements
-        cube_wavelengths = np.linspace(*config.swir_wavelengths)
-
-        # Get the corresponding wavelengths from the CSV for the SWIR region
-        csv_swir_wavelengths = csv_wavelengths[swir_start_idx:swir_end_idx]
-
-        # Create our filter matrix through interpolation
+        # Interpolate to match our wavelength points
         self.filter_matrix = self._interpolate_filters(
             filter_transmissions,
-            csv_swir_wavelengths,
-            cube_wavelengths
+            csv_wavelengths,
+            self.wavelengths
         ).float()
 
-        print(f"Loaded {self.num_filters} filters for wavelength range: "
-              f"{cube_wavelengths[0]:.1f}nm to {cube_wavelengths[-1]:.1f}nm")
-
     def _interpolate_filters(self, filters, src_wavelengths, dst_wavelengths):
-        """
-        Interpolate filter transmissions to match measurement wavelengths.
-        Args:
-            filters: Filter transmission data
-            src_wavelengths: Original wavelengths from CSV
-            dst_wavelengths: Target wavelengths for measurements
-        Returns:
-            Interpolated filter matrix as tensor
-        """
+        """Interpolate filter transmissions to match measurement wavelengths."""
         interpolated = []
         for filter_spectrum in filters:
             interp = np.interp(dst_wavelengths, src_wavelengths, filter_spectrum)
