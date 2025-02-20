@@ -49,9 +49,9 @@ class ReconstructionViewer(QMainWindow):
 
         # Add wavelength slider
         self.wavelength_slider = QSlider(Qt.Horizontal)
-        self.wavelength_slider.setMinimum(800)
-        self.wavelength_slider.setMaximum(1700)
-        self.wavelength_slider.setValue(1250)
+        self.wavelength_slider.setMinimum(0)
+        self.wavelength_slider.setMaximum(len(config.wavelength_indices) - 1)
+        self.wavelength_slider.setValue(len(config.wavelength_indices) // 2)
         self.wavelength_slider.valueChanged.connect(self.update_wavelength_display)
         control_layout.addWidget(QLabel("Wavelength:"))
         control_layout.addWidget(self.wavelength_slider)

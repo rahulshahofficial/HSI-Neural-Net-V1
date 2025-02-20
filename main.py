@@ -148,8 +148,8 @@ class HyperspectralProcessor:
 
 def main():
     """Main training and evaluation pipeline."""
-    num_images = 5
-    augmented_data_dir = "/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset/"
+    num_images = 10
+    augmented_data_dir = "/Volumes/ValentineLab-1/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset/"
 
     print("Starting Hyperspectral Neural Network Training Pipeline...")
     print(f"\nConfiguration:")
@@ -163,7 +163,7 @@ def main():
         processor = HyperspectralProcessor()
 
         print("\nLoading augmented dataset...")
-        all_data = processor.load_data(augmented_data_dir)
+        all_data = processor.load_data(num_images)
 
         print("\nPreparing datasets...")
         train_loader, val_loader, test_loader = processor.prepare_datasets(all_data)
