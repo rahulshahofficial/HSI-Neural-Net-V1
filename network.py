@@ -109,6 +109,6 @@ class FullImageHyperspectralNet(nn.Module):
         spatial_consistency_loss = torch.mean(dx ** 2) + torch.mean(dy ** 2)
 
         # Weighted Sum of Losses
-        total_loss = recon_loss + 0.1 * spatial_consistency_loss # + 0.1 * spectral_smoothness_loss
+        total_loss = recon_loss + 0.1 * spatial_consistency_loss + 0.1 * spectral_smoothness_loss
 
         return total_loss

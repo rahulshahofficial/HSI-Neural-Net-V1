@@ -23,10 +23,10 @@ class Config:
         self.batch_size = 64
         self.num_epochs = 100
         self.learning_rate = 1e-4
-        self.num_filters = 6
+        self.num_filters = 16
         # self.num_filters = 16
-        self.superpixel_height = 2
-        self.superpixel_width = 3  # Change superpixel size here
+        self.superpixel_height = 4
+        self.superpixel_width = 4 # Change superpixel size here
         # self.superpixel_size = 4 # Change superpixel size here
 
         # Modified parameters for AVIRIS dataset
@@ -52,9 +52,9 @@ class Config:
         # self.superpixel_size = 8 # Change superpixel size here
         # self.model_save_path = 'models/013125_hyperspectral_model_800to1700.pth'
 
-        self.num_filters = 6
+        self.num_filters = 16
         # self.superpixel_size = 3
-        self.model_save_path = 'models/021925_AVIRIS_6filters_FULLIMAGE.pth'
+        self.model_save_path = 'models/021925_AVIRIS_16filters_FULLIMAGE.pth'
         self.results_path = 'results/021925'
 
 config = Config()

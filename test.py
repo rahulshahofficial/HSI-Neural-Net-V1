@@ -25,7 +25,8 @@ class ReconstructionViewer(QMainWindow):
         self.original_image = None
         self.wavelengths = None
         self.current_wavelength_idx = None
-        self.data_dir = "/Volumes/ValentineLab-1/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset"
+        # self.data_dir = "/Volumes/ValentineLab-1/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset"
+        self.data_dir = "V:\SimulationData\Rahul\Hyperspectral Imaging Project\HSI Data Sets\AVIRIS_augmented_dataset"
 
         # Create main widget and layout
         main_widget = QWidget()

@@ -91,7 +91,7 @@ class FullImageHyperspectralDataset(Dataset):
        plt.figure(figsize=(15, 8))
        plt.subplot(121)
        plt.imshow(base_pattern, cmap='viridis')
-       plt.title('Single Superpixel Pattern (2x3)')
+       plt.title('Single Superpixel Pattern (4x4)')
        plt.colorbar(label='Filter Index')
 
        for i in range(self.superpixel_height):
