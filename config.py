@@ -1,5 +1,6 @@
 import os
 import platform
+import numpy as np
 
 class Config:
     def __init__(self):
@@ -11,7 +12,7 @@ class Config:
 
         # Dataset paths
         self.dataset_path = os.path.join(self.base_path, 'HSI Data Sets',
-                                       'HyperDrive_4wheelbuggyCapturedImages_SWIR')
+                                       'AVIRIS_augmented_dataset')
 
         # Filter paths
         self.filter_path = os.path.join(self.base_path, 'Machine Learning Codes',
@@ -21,26 +22,32 @@ class Config:
         self.batch_size = 1  # Changed to 1 since we're processing full images
         self.num_epochs = 100
         self.learning_rate = 1e-4
-        self.num_filters = 6  # Number of different filters to use
+        self.num_filters = 16  # Number of different filters to use
 
         # Network architecture parameters
         self.conv_channels = [1, 64, 128, 256, 512]  # Conv channels
-        self.num_wavelengths = 9
-        self.input_channels = 1
         self.kernel_size = 3
         self.padding = 1
         self.use_batch_norm = True
 
-        # Wavelength parameters
-        self.swir_wavelengths = (1100, 1700, 9)  # start, end, points
+        # Modified parameters for AVIRIS dataset
+        self.image_height = 100  # For our cropped images
+        self.image_width = 100
+        self.wavelength_range = (800, 1700)  # nm, matching filter range
 
-        # Filter arrangement parameters
-        self.num_arrangements = 5  # Number of random arrangements to try
+        # Generate full wavelength range and indices
+        self.full_wavelengths = np.linspace(400, 2500, 220)
+        mask = (self.full_wavelengths >= 800) & (self.full_wavelengths <= 1700)
+        self.wavelength_indices = np.where(mask)[0]
+        self.num_wavelengths = len(self.wavelength_indices)
+
+        # Random arrangement parameters
+        self.num_arrangements =2  # Number of random arrangements to try
         self.arrangement_seed = 42  # Base seed for reproducibility
 
         # Output paths
-        self.model_save_path = 'models/021425/Random_Filter_Arrangement_1100to1700_9filters.pth'
-        self.results_path = 'results/021425'
+        self.model_save_path = 'models/022124_AVIRIS_RandomArrangement.pth'
+        self.results_path = 'results/022124'
         self.arrangements_path = os.path.join(self.results_path, 'arrangements')
 
 config = Config()

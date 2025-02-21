@@ -7,8 +7,6 @@ import os
 from datetime import datetime
 
 from config import config
-from dataset import HyperspectralDataset
-from network import HyperspectralNet
 
 class Trainer:
     def __init__(self, model, train_loader, val_loader=None):
@@ -25,25 +23,26 @@ class Trainer:
     def train_epoch(self):
         self.model.train()
         running_loss = 0.0
-        for filtered_measurements, spectra in self.train_loader:
-            # Move data to device
+        num_batches = len(self.train_loader)
+
+        for batch_idx, (filtered_measurements, spectra) in enumerate(self.train_loader):
             filtered_measurements = filtered_measurements.to(self.device)
             spectra = spectra.to(self.device)
 
             self.optimizer.zero_grad()
             outputs = self.model(filtered_measurements)
+            loss = self.model.compute_loss(outputs, spectra, self.criterion)
 
-            # Calculate loss
-            loss = self.criterion(outputs, spectra)
             loss.backward()
-
-            # Gradient clipping
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
             self.optimizer.step()
 
             running_loss += loss.item()
 
-        return running_loss / len(self.train_loader)
+            if (batch_idx + 1) % 10 == 0:
+                print(f'Batch [{batch_idx + 1}/{num_batches}], Loss: {loss.item():.6f}')
+
+        return running_loss / num_batches
 
     def validate(self):
         if self.val_loader is None:
@@ -58,7 +57,7 @@ class Trainer:
                 spectra = spectra.to(self.device)
 
                 outputs = self.model(filtered_measurements)
-                loss = self.criterion(outputs, spectra)
+                loss = self.model.compute_loss(outputs, spectra, self.criterion)
                 running_loss += loss.item()
 
         return running_loss / len(self.val_loader)
@@ -77,7 +76,6 @@ class Trainer:
                 val_loss = self.validate()
                 self.val_losses.append(val_loss)
 
-                # Save best model
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
                     self.save_model()
@@ -89,7 +87,7 @@ class Trainer:
                     print(f'Validation Loss: {val_loss:.6f}')
 
         self.plot_training_history()
-        return best_val_loss
+        return best_val_loss if self.val_loader else train_loss
 
     def save_model(self):
         os.makedirs(os.path.dirname(config.model_save_path), exist_ok=True)
@@ -99,7 +97,6 @@ class Trainer:
             'train_losses': self.train_losses,
             'val_losses': self.val_losses
         }, config.model_save_path)
-        print(f"Model saved to {config.model_save_path}")
 
     def plot_training_history(self):
         plt.figure(figsize=(10, 6))
@@ -118,3 +115,10 @@ class Trainer:
             f'training_history_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
         ))
         plt.close()
+
+    def load_checkpoint(self, checkpoint_path):
+        checkpoint = torch.load(checkpoint_path)
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.train_losses = checkpoint.get('train_losses', [])
+        self.val_losses = checkpoint.get('val_losses', [])

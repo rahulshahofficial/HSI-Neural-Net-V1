@@ -49,13 +49,13 @@ class HyperspectralNet(nn.Module):
         self.final = nn.Conv2d(64, config.num_wavelengths, kernel_size=3, padding=1)
 
     def forward(self, x):
-        # Encoder with stored intermediate outputs
+        # Encoder path
         e1 = self.enc1(x)
         e2 = self.enc2(e1)
         e3 = self.enc3(e2)
         e4 = self.enc4(e3)
 
-        # Decoder with skip connections
+        # Decoder path with skip connections
         d1 = self.dec1(torch.cat([e4, e3], dim=1))
         d2 = self.dec2(torch.cat([d1, e2], dim=1))
         d3 = self.dec3(torch.cat([d2, e1], dim=1))
@@ -63,10 +63,29 @@ class HyperspectralNet(nn.Module):
         # Final reconstruction
         x = self.final(d3)
 
-        # Ensure non-negativity and normalization
+        # Apply non-negativity constraint and normalization
         x = torch.relu(x)
         x_max = x.max()
         if x_max > 0:
             x = x / (x_max + 1e-8)
 
         return x
+
+    def compute_loss(self, outputs, targets, criterion):
+        """Compute total loss including reconstruction and regularization terms"""
+        # Reconstruction loss
+        recon_loss = criterion(outputs, targets)
+
+        # Spectral smoothness loss
+        spectral_diff = outputs[:, 1:, :, :] - outputs[:, :-1, :, :]
+        spectral_smoothness = torch.mean(spectral_diff ** 2)
+
+        # Spatial consistency loss
+        spatial_diff_x = outputs[:, :, 1:, :] - outputs[:, :, :-1, :]
+        spatial_diff_y = outputs[:, :, :, 1:] - outputs[:, :, :, :-1]
+        spatial_consistency = torch.mean(spatial_diff_x ** 2) + torch.mean(spatial_diff_y ** 2)
+
+        # Combined loss with weights
+        total_loss = recon_loss + 0.1 * spectral_smoothness + 0.1 * spatial_consistency
+
+        return total_loss

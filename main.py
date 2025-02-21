@@ -1,151 +1,124 @@
 import os
 import torch
-from torch.utils.data import DataLoader, random_split
-from torch.nn import functional as F
-import matplotlib.pyplot as plt
 import numpy as np
+import rasterio
+from torch.utils.data import DataLoader
+import matplotlib.pyplot as plt
 
 from config import config
 from dataset import HyperspectralDataset
 from network import HyperspectralNet
-from train import Trainer
 from filter_arrangement import FilterArrangementEvaluator
 
-class HyperspectralViewer:
-    def __init__(self, swir_path):
-        # Load SWIR data
-        self.swir_cube = np.load(swir_path).reshape((168, 211, 9))
-        self.wavelengths = np.linspace(1100, 1700, 9)
-        # Normalize the cube
-        self.cube = self.swir_cube / np.max(self.swir_cube)
+def load_data(num_images=None):
+    """Load AVIRIS dataset"""
+    data_dir = config.dataset_path
+    files = sorted([f for f in os.listdir(data_dir) if f.endswith('.tif')])
 
-    @classmethod
-    def get_all_files(cls):
-        base_path = config.dataset_path
-        swir_path = os.path.join(base_path, "SWIR_RAW")
-        return {
-            'files': sorted([f.replace('.npy', '') for f in os.listdir(swir_path)
-                           if f.endswith('.npy')]),
-            'swir_path': swir_path
-        }
+    if num_images:
+        files = files[:num_images]
 
-    @classmethod
-    def load_all_data(cls, num_images=None):
-        paths = cls.get_all_files()
-        combined_data = []
-        for filename in paths['files'][:num_images]:
-            print(f"Loading file: {filename}")
-            swir_file = os.path.join(paths['swir_path'], f"{filename}.npy")
-            viewer = HyperspectralViewer(swir_file)
-            combined_data.append(viewer.cube)
-        return np.stack(combined_data)  # Stack preserves image structure
+    all_data = []
+    print(f"Loading {len(files)} images...")
 
-def main(num_images=100):
+    for file in files:
+        try:
+            with rasterio.open(os.path.join(data_dir, file)) as src:
+                data = src.read()  # Shape: (C,H,W)
+                data = np.transpose(data, (1, 2, 0))  # Shape: (H,W,C)
+                all_data.append(data)
+
+            if len(all_data) % 50 == 0:
+                print(f"Loaded {len(all_data)} images")
+
+        except Exception as e:
+            print(f"Error loading {file}: {str(e)}")
+            continue
+
+    return np.stack(all_data)
+
+def main(num_images=10):
     torch.manual_seed(42)
     print("Starting Hyperspectral Neural Network Training...")
 
-    # Load data
-    print("Loading all hyperspectral data...")
-    all_data = HyperspectralViewer.load_all_data(num_images)
-    if len(all_data.shape) == 3:
-        all_data = all_data.reshape(1, *all_data.shape)
+    # Load AVIRIS data
+    print("\nLoading dataset...")
+    all_data = load_data(num_images)
 
-    # Create evaluator
+    # Evaluate filter arrangements
     print(f"\nEvaluating {config.num_arrangements} different filter arrangements...")
     evaluator = FilterArrangementEvaluator(
         all_data,
-        HyperspectralNet,
         num_arrangements=config.num_arrangements
     )
 
-    # Find best arrangement and get trained model
+    # Find best arrangement
     best_result = evaluator.evaluate_all()
-    best_model = evaluator.best_model
 
-    # Visualize filter arrangements
+    # Visualize arrangements
     evaluator.visualize_arrangements()
-
-    # Save best model and arrangement
     evaluator.save_best_model()
 
-    print("\nTesting best model on validation data...")
-    best_model.eval()
+    # Test best model
+    print("\nTesting best model...")
+    model = best_result['model']
+    model.eval()
+
     with torch.no_grad():
-        # Create dataset with best arrangement
         dataset = HyperspectralDataset(all_data, seed=best_result['seed'])
-
-        # Get a sample image
         filtered_measurements, original_spectrum = dataset[0]
-        reconstructed_spectrum = best_model(filtered_measurements.unsqueeze(0)).squeeze()
+        reconstructed_spectrum = model(filtered_measurements.unsqueeze(0)).squeeze()
 
-        # Print shapes for debugging
-        print(f"\nDebug Information:")
-        print(f"Original spectrum shape: {original_spectrum.shape}")
-        print(f"Reconstructed spectrum shape: {reconstructed_spectrum.shape}")
-
-        # Visualize center pixel spectrum
+        # Center pixel spectrum
         h, w = original_spectrum.shape[1:]
         center_h, center_w = h//2, w//2
-
-        # Extract center pixel spectra
         orig_spectrum = original_spectrum[:, center_h, center_w].numpy()
         recon_spectrum = reconstructed_spectrum[:, center_h, center_w].numpy()
 
-        # Plot spectral comparison
+        # Plot results
+        os.makedirs(config.results_path, exist_ok=True)
+
+        # Spectral comparison
         plt.figure(figsize=(10, 6))
-        wavelengths = np.linspace(1100, 1700, 9)
+        wavelengths = config.full_wavelengths[config.wavelength_indices]
         plt.plot(wavelengths, orig_spectrum, 'b-', label='Original')
         plt.plot(wavelengths, recon_spectrum, 'r--', label='Reconstructed')
         plt.xlabel('Wavelength (nm)')
         plt.ylabel('Intensity')
-        plt.title('Sample Reconstruction Result (Center Pixel)')
+        plt.title('Sample Reconstruction (Center Pixel)')
         plt.legend()
         plt.grid(True)
-
-        # Save spectral comparison
-        os.makedirs('results', exist_ok=True)
-        plt.savefig('results/021425/sample_reconstruction.png')
+        plt.savefig(os.path.join(config.results_path, 'spectral_reconstruction.png'))
         plt.close()
 
-        # Visualize full image reconstruction at middle wavelength
-        mid_wavelength_idx = original_spectrum.shape[0] // 2
-
+        # Full image comparison
+        mid_wavelength_idx = len(wavelengths) // 2
         plt.figure(figsize=(15, 5))
 
-        # Original image
         plt.subplot(131)
         plt.imshow(original_spectrum[mid_wavelength_idx].numpy())
-        plt.title(f'Original (λ={wavelengths[mid_wavelength_idx]:.0f}nm)')
+        plt.title(f'Original ({wavelengths[mid_wavelength_idx]:.0f}nm)')
         plt.colorbar()
 
-        # Reconstructed image
         plt.subplot(132)
         plt.imshow(reconstructed_spectrum[mid_wavelength_idx].numpy())
-        plt.title(f'Reconstructed (λ={wavelengths[mid_wavelength_idx]:.0f}nm)')
+        plt.title(f'Reconstructed ({wavelengths[mid_wavelength_idx]:.0f}nm)')
         plt.colorbar()
 
-        # Error map
+        plt.subplot(133)
         error = np.abs(original_spectrum[mid_wavelength_idx].numpy() -
                       reconstructed_spectrum[mid_wavelength_idx].numpy())
-        plt.subplot(133)
         plt.imshow(error)
         plt.title('Absolute Error')
         plt.colorbar()
 
         plt.tight_layout()
-        plt.savefig('results/021425/full_image_comparison.png')
+        plt.savefig(os.path.join(config.results_path, 'spatial_reconstruction.png'))
         plt.close()
 
-        # Calculate and print error metrics
-        mse = F.mse_loss(reconstructed_spectrum, original_spectrum).item()
-        mae = F.l1_loss(reconstructed_spectrum, original_spectrum).item()
-
-        print("\nError Metrics:")
-        print(f"MSE: {mse:.6f}")
-        print(f"MAE: {mae:.6f}")
-
-    print("\nResults saved in 'results' directory")
+        # Calculate error metrics
+        mse = torch.mean((reconstructed_spectrum - original_spectrum) ** 2).item()
+        print(f"\nMSE: {mse:.6f}")
 
 if __name__ == "__main__":
-    # Can adjust these parameters
-    main(num_images=50)
+    main()
