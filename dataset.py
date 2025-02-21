@@ -6,32 +6,29 @@ from config import config
 
 class HyperspectralDataset(Dataset):
     def __init__(self, hyperspectral_cube, seed=42):
-        """
-        Args:
-            hyperspectral_cube: Input data of shape (N,H,W,C) or (H,W,C)
-            seed: Random seed for reproducible filter pattern
-        """
         torch.manual_seed(seed)
         np.random.seed(seed)
-
         self.num_filters = config.num_filters
 
-        if len(hyperspectral_cube.shape) == 3:
-            self.num_images = 1
-            hyperspectral_cube = hyperspectral_cube.reshape(1, *hyperspectral_cube.shape)
+        print(f"Cube shape before reshape: {hyperspectral_cube.shape}")
+        print(f"Max wavelength index: {max(config.wavelength_indices)}")
+
+        if len(hyperspectral_cube.shape) == 4:
+            self.num_images, h, w, wavelengths = hyperspectral_cube.shape
         else:
-            self.num_images = hyperspectral_cube.shape[0]
+            h, w, wavelengths = hyperspectral_cube.shape
+            print(f"Number of wavelengths: {wavelengths}")
+
+            self.num_images = 1
+            hyperspectral_cube = hyperspectral_cube.reshape(1, h, w, wavelengths)
 
         # Create random filter arrangement
-        h, w = hyperspectral_cube.shape[1:3]
         self.filter_map = torch.randint(0, self.num_filters, (h, w))
         print(f"Created random filter arrangement of shape {self.filter_map.shape}")
 
         # Process images
         hyperspectral_cube = hyperspectral_cube / np.max(hyperspectral_cube)
-        self.hypercube = torch.from_numpy(
-            hyperspectral_cube[:, :, :, config.wavelength_indices]
-        ).float()
+        self.hypercube = torch.from_numpy(hyperspectral_cube[:, :, :, config.wavelength_indices]).float()
 
         self.wavelengths = config.full_wavelengths[config.wavelength_indices]
         self.load_filter_data()
@@ -137,3 +134,7 @@ class HyperspectralDataset(Dataset):
         plt.grid(True)
         plt.legend()
         plt.show()
+print("Random arrangement wavelength details:")
+print(f"Original cube shape: {hyperspectral_cube.shape}")
+print(f"Wavelength indices: {config.wavelength_indices}")
+print(f"Selected wavelengths shape: {self.hypercube.shape}")
