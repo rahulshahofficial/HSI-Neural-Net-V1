@@ -42,7 +42,7 @@ class Config:
         self.num_wavelengths = len(self.wavelength_indices)
 
         # Random arrangement parameters
-        self.num_arrangements =2  # Number of random arrangements to try
+        self.num_arrangements =1 # Number of random arrangements to try
         self.arrangement_seed = 42  # Base seed for reproducibility
 
         # Output paths

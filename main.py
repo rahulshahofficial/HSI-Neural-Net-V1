@@ -38,6 +38,7 @@ def load_data(num_images=None):
     return np.stack(all_data)
 
 def main(num_images=10):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch.manual_seed(42)
     print("Starting Hyperspectral Neural Network Training...")
 
@@ -62,18 +63,21 @@ def main(num_images=10):
     # Test best model
     print("\nTesting best model...")
     model = best_result['model']
+    model = model.to(device)
     model.eval()
 
     with torch.no_grad():
         dataset = HyperspectralDataset(all_data, seed=best_result['seed'])
         filtered_measurements, original_spectrum = dataset[0]
+        filtered_measurements = filtered_measurements.to(device)  
+        original_spectrum = original_spectrum.to(device)  # Add this
         reconstructed_spectrum = model(filtered_measurements.unsqueeze(0)).squeeze()
 
         # Center pixel spectrum
         h, w = original_spectrum.shape[1:]
         center_h, center_w = h//2, w//2
-        orig_spectrum = original_spectrum[:, center_h, center_w].numpy()
-        recon_spectrum = reconstructed_spectrum[:, center_h, center_w].numpy()
+        orig_spectrum = original_spectrum[:, center_h, center_w].cpu().numpy()
+        recon_spectrum = reconstructed_spectrum.cpu()[:, center_h, center_w].numpy()
 
         # Plot results
         os.makedirs(config.results_path, exist_ok=True)
@@ -96,18 +100,18 @@ def main(num_images=10):
         plt.figure(figsize=(15, 5))
 
         plt.subplot(131)
-        plt.imshow(original_spectrum[mid_wavelength_idx].numpy())
+        plt.imshow(original_spectrum[mid_wavelength_idx].cpu().numpy())
         plt.title(f'Original ({wavelengths[mid_wavelength_idx]:.0f}nm)')
         plt.colorbar()
 
         plt.subplot(132)
-        plt.imshow(reconstructed_spectrum[mid_wavelength_idx].numpy())
+        plt.imshow(reconstructed_spectrum.cpu()[mid_wavelength_idx].numpy())
         plt.title(f'Reconstructed ({wavelengths[mid_wavelength_idx]:.0f}nm)')
         plt.colorbar()
 
         plt.subplot(133)
-        error = np.abs(original_spectrum[mid_wavelength_idx].numpy() -
-                      reconstructed_spectrum[mid_wavelength_idx].numpy())
+        error = np.abs(original_spectrum[mid_wavelength_idx].cpu().numpy() -
+                      reconstructed_spectrum.cpu()[mid_wavelength_idx].numpy())
         plt.imshow(error)
         plt.title('Absolute Error')
         plt.colorbar()

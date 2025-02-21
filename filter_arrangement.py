@@ -35,7 +35,7 @@ class FilterArrangementEvaluator:
 
         model = HyperspectralNet()
         trainer = Trainer(model, train_loader, val_loader)
-        final_val_loss = trainer.train(verbose=False)
+        final_val_loss = trainer.train(verbose=True)
 
         return {
             'seed': seed,

@@ -17,6 +17,7 @@ from dataset import HyperspectralDataset
 class ReconstructionViewer(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.setWindowTitle('AVIRIS HSI Reconstruction Viewer')
         self.setGeometry(100, 100, 1600, 900)
 
@@ -100,6 +101,7 @@ class ReconstructionViewer(QMainWindow):
         checkpoint = torch.load(config.model_save_path)
         self.model = HyperspectralNet()
         self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.model = self.model.to(self.device)
         self.filter_map = checkpoint['filter_map']
         self.model.eval()
 
@@ -127,12 +129,13 @@ class ReconstructionViewer(QMainWindow):
 
         # Perform reconstruction
         with torch.no_grad():
+            filtered_measurements = filtered_measurements.to(self.device)
             filtered_measurements = filtered_measurements.unsqueeze(0)
             reconstructed = self.model(filtered_measurements)
             self.full_reconstruction = reconstructed.squeeze(0).permute(1, 2, 0)
 
         # Calculate RMSE
-        mse = torch.mean((self.full_reconstruction - torch.tensor(self.original_image)) ** 2)
+        mse = torch.mean((self.full_reconstruction.cpu() - torch.tensor(self.original_image)) ** 2)
         rmse = torch.sqrt(mse)
 
         # Update time and RMSE labels
@@ -157,7 +160,7 @@ class ReconstructionViewer(QMainWindow):
         self.ax_recon.clear()
 
         orig_img = self.original_image[:, :, idx]
-        recon_img = self.full_reconstruction[:, :, idx].numpy()
+        recon_img = self.full_reconstruction.cpu()[:, :, idx].numpy()
 
         self.ax_orig.imshow(orig_img, cmap='viridis')
         self.ax_recon.imshow(recon_img, cmap='viridis')
@@ -187,7 +190,7 @@ class ReconstructionViewer(QMainWindow):
                             self.original_image[y, x, :],
                             'b-', label='Original')
         self.ax_spectrum.plot(self.wavelengths,
-                            self.full_reconstruction[y, x, :].numpy(),
+                            self.full_reconstruction.cpu()[y, x, :].numpy(),
                             'r--', label='Reconstructed')
 
         self.ax_spectrum.set_xlabel('Wavelength (nm)')
