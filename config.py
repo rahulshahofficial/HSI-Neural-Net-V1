@@ -58,3 +58,6 @@ class Config:
         self.results_path = 'results/021925'
 
 config = Config()
+print(f"Number of wavelength indices: {len(config.wavelength_indices)}")
+print(f"Range of indices: {min(config.wavelength_indices)} to {max(config.wavelength_indices)}")
+print(f"Actual wavelengths: {config.full_wavelengths[config.wavelength_indices[0]]} to {config.full_wavelengths[config.wavelength_indices[-1]]}")
