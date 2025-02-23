@@ -25,6 +25,11 @@ def load_data(num_images=None):
         try:
             with rasterio.open(os.path.join(data_dir, file)) as src:
                 data = src.read()  # Shape: (C,H,W)
+
+                # ADD THIS PRINT STATEMENT:
+                print("Just read file:", file, "Shape of read data:", data.shape)
+
+                data = data[config.wavelength_indices]
                 data = np.transpose(data, (1, 2, 0))  # Shape: (H,W,C)
                 all_data.append(data)
 

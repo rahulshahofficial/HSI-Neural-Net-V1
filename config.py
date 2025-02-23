@@ -39,8 +39,10 @@ class Config:
         self.full_wavelengths = np.linspace(400, 2500, 220)
         mask = (self.full_wavelengths >= 800) & (self.full_wavelengths <= 1700)
         self.wavelength_indices = np.where(mask)[0]
+        # self.wavelength_indices = np.arange(len(np.where(mask)[0]))
         self.num_wavelengths = len(self.wavelength_indices)
-
+        self.used_wavelengths = self.full_wavelengths[self.wavelength_indices]
+        
         # Random arrangement parameters
         self.num_arrangements =1 # Number of random arrangements to try
         self.arrangement_seed = 42  # Base seed for reproducibility
