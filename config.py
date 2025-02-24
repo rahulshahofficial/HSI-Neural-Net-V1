@@ -9,7 +9,7 @@ class Config:
         if platform.system() == 'Windows':
             self.base_path = r"V:\SimulationData\Rahul\Hyperspectral Imaging Project"
         else:  # macOS
-            self.base_path = '/Volumes/ValentineLab-1/SimulationData/Rahul/Hyperspectral Imaging Project'
+            self.base_path = '/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project'
 
         # Dataset paths
         self.dataset_path = os.path.join(self.base_path, 'HSI Data Sets',

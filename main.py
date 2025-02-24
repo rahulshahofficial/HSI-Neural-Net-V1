@@ -18,8 +18,8 @@ class HyperspectralProcessor:
 
     def load_data(self, num_images=None):
         """Load pre-generated augmented dataset"""
-        # data_dir = "/Volumes/ValentineLab-1/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset"
-        data_dir = "V:\SimulationData\Rahul\Hyperspectral Imaging Project\HSI Data Sets\AVIRIS_augmented_dataset"
+        data_dir = "/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset"
+        # data_dir = "V:\SimulationData\Rahul\Hyperspectral Imaging Project\HSI Data Sets\AVIRIS_augmented_dataset"
         files = sorted([f for f in os.listdir(data_dir) if f.endswith('.tif')])
 
 
@@ -150,8 +150,8 @@ class HyperspectralProcessor:
 def main():
     """Main training and evaluation pipeline."""
     num_images = 200
-    # augmented_data_dir = "/Volumes/ValentineLab-1/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset/"
-    augmented_data_dir = "V:\SimulationData\Rahul\Hyperspectral Imaging Project\HSI Data Sets\AVIRIS_augmented_dataset"
+    augmented_data_dir = "/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset/"
+    # augmented_data_dir = "V:\SimulationData\Rahul\Hyperspectral Imaging Project\HSI Data Sets\AVIRIS_augmented_dataset"
 
     print("Starting Hyperspectral Neural Network Training Pipeline...")
     print(f"\nConfiguration:")
