@@ -42,9 +42,9 @@ def load_data(num_images=None):
 
     return np.stack(all_data)
 
-def main(num_images=10):
+def main(num_images=200):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    torch.manual_seed(42)
+    torch.manual_seed(1)
     print("Starting Hyperspectral Neural Network Training...")
 
     # Load AVIRIS data

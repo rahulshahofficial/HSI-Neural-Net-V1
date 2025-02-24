@@ -44,8 +44,8 @@ class Config:
         self.used_wavelengths = self.full_wavelengths[self.wavelength_indices]
         
         # Random arrangement parameters
-        self.num_arrangements =1 # Number of random arrangements to try
-        self.arrangement_seed = 42  # Base seed for reproducibility
+        self.num_arrangements =5 # Number of random arrangements to try
+        self.arrangement_seed = 1  # Base seed for reproducibility
 
         # Output paths
         self.model_save_path = 'models/022124_AVIRIS_RandomArrangement.pth'

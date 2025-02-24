@@ -5,7 +5,7 @@ import pandas as pd
 from config import config
 
 class HyperspectralDataset(Dataset):
-    def __init__(self, hyperspectral_cube, seed=42):
+    def __init__(self, hyperspectral_cube, seed=1):
         """
         Initialize the dataset with a hyperspectral cube.
         Args:

@@ -12,7 +12,7 @@ from network import HyperspectralNet
 from train import Trainer
 
 class FilterArrangementEvaluator:
-    def __init__(self, hyperspectral_images, num_arrangements=None, base_seed=42):
+    def __init__(self, hyperspectral_images, num_arrangements=None, base_seed=1):
         self.images = hyperspectral_images
         self.num_arrangements = num_arrangements or config.num_arrangements
         self.base_seed = base_seed
