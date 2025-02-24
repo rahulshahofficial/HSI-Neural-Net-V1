@@ -21,7 +21,7 @@ class Config:
 
         # Model parameters
         self.batch_size = 64
-        self.num_epochs = 100
+        self.num_epochs = 10
         self.learning_rate = 1e-4
         self.num_filters = 16
         # self.num_filters = 16
@@ -54,8 +54,8 @@ class Config:
 
         self.num_filters = 16
         # self.superpixel_size = 3
-        self.model_save_path = 'models/021925_AVIRIS_16filters_FULLIMAGE.pth'
-        self.results_path = 'results/021925'
+        self.model_save_path = 'models/022425_AVIRIS_16filters_SRNet.pth'
+        self.results_path = 'results/022425'
 
 config = Config()
 print(f"Number of wavelength indices: {len(config.wavelength_indices)}")

@@ -11,13 +11,13 @@ import os
 import rasterio
 
 from config import config
-from network import FullImageHyperspectralNet
+from srnet_model import SpectralReconstructionNet
 from dataset import FullImageHyperspectralDataset
 
 class ReconstructionViewer(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('AVIRIS HSI Reconstruction Viewer')
+        self.setWindowTitle('AVIRIS HSI Reconstruction Viewer (SRNet)')
         self.setGeometry(100, 100, 1600, 900)
 
         # Initialize variables
@@ -100,7 +100,14 @@ class ReconstructionViewer(QMainWindow):
         self.canvas.mpl_connect('button_press_event', self.on_click)
 
         # Load the trained model
-        self.model = FullImageHyperspectralNet()
+        self.model = SpectralReconstructionNet(
+            input_channels=1,
+            out_channels=len(config.wavelength_indices),
+            dim=64,
+            deep_stage=3,
+            num_blocks=[1, 2, 3],
+            num_heads=[2, 4, 8]
+        )
         self.model.load_state_dict(torch.load(config.model_save_path, map_location='cpu'))
         self.model.eval()
 
@@ -109,7 +116,7 @@ class ReconstructionViewer(QMainWindow):
         return sorted([f for f in os.listdir(self.data_dir) if f.endswith('.tif')])
 
     def reconstruct_image(self):
-        """Reconstruct the selected image."""
+        """Reconstruct the selected image using SRNet."""
         start_time = time.time()
         selected_file = self.file_combo.currentText()
 
@@ -121,7 +128,8 @@ class ReconstructionViewer(QMainWindow):
 
         # Create dataset with single image
         dataset = FullImageHyperspectralDataset(img_data)
-        filtered_measurements, original_spectrum = dataset[0]
+        # Get the filtered measurements, filter pattern, and original spectrum
+        filtered_measurements, filter_pattern, original_spectrum = dataset[0]
 
         # Store wavelengths and original image
         self.wavelengths = config.full_wavelengths[config.wavelength_indices]
@@ -129,9 +137,10 @@ class ReconstructionViewer(QMainWindow):
 
         # Perform reconstruction
         with torch.no_grad():
-            filtered_measurements = filtered_measurements.unsqueeze(0)
-            reconstructed = self.model(filtered_measurements)
-            self.full_reconstruction = reconstructed.squeeze(0)
+            filtered_measurements = filtered_measurements.unsqueeze(0)  # Add batch dimension
+            filter_pattern = filter_pattern.unsqueeze(0)  # Add batch dimension
+            reconstructed = self.model(filtered_measurements, filter_pattern)
+            self.full_reconstruction = reconstructed.squeeze(0)  # Remove batch dimension
 
         # Calculate RMSE
         mse = torch.mean((self.full_reconstruction - torch.tensor(self.original_image)) ** 2)
@@ -208,11 +217,13 @@ class ReconstructionViewer(QMainWindow):
             x, y = int(event.xdata), int(event.ydata)
             self.plot_spectrum(x, y)
 
+
 def main():
     app = QApplication(sys.argv)
     viewer = ReconstructionViewer()
     viewer.show()
     sys.exit(app.exec_())
+
 
 if __name__ == '__main__':
     main()

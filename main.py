@@ -8,7 +8,7 @@ import rasterio
 
 from config import config
 from dataset import FullImageHyperspectralDataset
-from network import FullImageHyperspectralNet
+from srnet_model import SpectralReconstructionNet
 from train import Trainer
 
 class HyperspectralProcessor:
@@ -21,7 +21,6 @@ class HyperspectralProcessor:
         data_dir = "/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset"
         # data_dir = "V:\SimulationData\Rahul\Hyperspectral Imaging Project\HSI Data Sets\AVIRIS_augmented_dataset"
         files = sorted([f for f in os.listdir(data_dir) if f.endswith('.tif')])
-
 
         if num_images and num_images < len(files):
             files = files[:num_images]
@@ -86,17 +85,46 @@ class HyperspectralProcessor:
 
         return train_loader, val_loader, test_loader
 
+    def create_srnet_model(self):
+        """Create and initialize the SRNet model"""
+        # Get the number of output wavelengths from config
+        num_wavelengths = config.num_output_wavelengths
+
+        # Create SRNet model with appropriate configuration
+        model = SpectralReconstructionNet(
+            input_channels=1,  # Single channel of filtered measurements
+            out_channels=num_wavelengths,  # Number of spectral bands to reconstruct
+            dim=64,  # Base feature dimension (adjust based on available memory)
+            deep_stage=3,  # Number of encoder/decoder stages
+            num_blocks=[1, 2, 3],  # Increasing number of SAM blocks with depth
+            num_heads=[2, 4, 8]  # Increasing number of attention heads with depth
+        )
+
+        print(f"SRNet Configuration:")
+        print(f"  Base dimension: 64")
+        print(f"  Number of stages: 3")
+        print(f"  Attention blocks per stage: [1, 2, 3]")
+        print(f"  Attention heads per stage: [2, 4, 8]")
+        print(f"  Output wavelengths: {num_wavelengths}")
+
+        return model
+
     def visualize_reconstruction(self, model, test_loader, save_dir='results'):
         """Visualize reconstruction results."""
         os.makedirs(save_dir, exist_ok=True)
         model.eval()
 
         with torch.no_grad():
-            filtered_measurements, original_spectrum = next(iter(test_loader))
+            # Get a test sample
+            filtered_measurements, filter_pattern, original_spectrum = next(iter(test_loader))
+
+            # Move to device
             filtered_measurements = filtered_measurements.to(self.device)
+            filter_pattern = filter_pattern.to(self.device)
             original_spectrum = original_spectrum.to(self.device)
 
-            reconstructed_spectrum = model(filtered_measurements)
+            # Perform reconstruction
+            reconstructed_spectrum = model(filtered_measurements, filter_pattern)
 
             # Move to CPU for plotting
             original_spectrum = original_spectrum.cpu().numpy()[0]
@@ -147,13 +175,12 @@ class HyperspectralProcessor:
             plt.savefig(os.path.join(save_dir, f'fullimage_comparison_{timestamp}.png'))
             plt.close()
 
+
 def main():
     """Main training and evaluation pipeline."""
     num_images = 200
-    augmented_data_dir = "/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset/"
-    # augmented_data_dir = "V:\SimulationData\Rahul\Hyperspectral Imaging Project\HSI Data Sets\AVIRIS_augmented_dataset"
 
-    print("Starting Hyperspectral Neural Network Training Pipeline...")
+    print("Starting Hyperspectral Neural Network Training Pipeline with SRNet...")
     print(f"\nConfiguration:")
     print(f"Number of filters: {config.num_filters}")
     print(f"Superpixel arrangement: {config.superpixel_height}×{config.superpixel_width}")
@@ -170,9 +197,9 @@ def main():
         print("\nPreparing datasets...")
         train_loader, val_loader, test_loader = processor.prepare_datasets(all_data)
 
-        print("\nInitializing model...")
-        model = FullImageHyperspectralNet()
-        print(f"Model architecture:\n{model}")
+        print("\nInitializing SRNet model...")
+        model = processor.create_srnet_model()
+        print(f"Model created successfully")
 
         trainer = Trainer(model, train_loader, val_loader)
 
