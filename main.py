@@ -18,7 +18,7 @@ class HyperspectralProcessor:
 
     def load_data(self, num_images=None):
         """Load pre-generated augmented dataset"""
-        data_dir = "/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset"
+        data_dir = "/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset_2"
         # data_dir = "V:\SimulationData\Rahul\Hyperspectral Imaging Project\HSI Data Sets\AVIRIS_augmented_dataset"
         files = sorted([f for f in os.listdir(data_dir) if f.endswith('.tif')])
 
@@ -178,7 +178,7 @@ class HyperspectralProcessor:
 
 def main():
     """Main training and evaluation pipeline."""
-    num_images = 200
+    num_images = 10
 
     print("Starting Hyperspectral Neural Network Training Pipeline with SRNet...")
     print(f"\nConfiguration:")

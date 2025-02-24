@@ -7,12 +7,13 @@ from scipy.ndimage import rotate
 def load_and_normalize_image(filepath):
     with rasterio.open(filepath) as src:
         img = src.read()
-        # Normalize per band
-        for i in range(img.shape[0]):
-            img[i] = (img[i] - img[i].min()) / (img[i].max() - img[i].min())
+        # Normalize globally across all bands instead of per band
+        min_val = img.min()
+        max_val = img.max()
+        img = (img - min_val) / (max_val - min_val)
         return img
 
-def generate_augmented_dataset(source_dir, output_dir, num_images=500, crop_size=100):
+def generate_augmented_dataset(source_dir, output_dir, num_images=50, crop_size=64):
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     source_files = [f for f in os.listdir(source_dir) if f.endswith('.tif')]
     source_images = [load_and_normalize_image(os.path.join(source_dir, f)) for f in source_files]
@@ -61,6 +62,7 @@ def generate_augmented_dataset(source_dir, output_dir, num_images=500, crop_size
             print(f"Generated {count} images")
 
 if __name__ == "__main__":
-    source_dir = "/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_Indian_Pine_SWIR_10_4231_R7RX991C/aviris_hyperspectral_data/"
-    output_dir = "/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset/"
+    # source_dir = "/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_Indian_Pine_SWIR_10_4231_R7RX991C/aviris_hyperspectral_data/"
+    source_dir = "/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_Indian_Pine_SWIR_10_4231_R7RX991C/T1"
+    output_dir = "/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset_2/"
     generate_augmented_dataset(source_dir, output_dir)

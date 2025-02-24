@@ -13,7 +13,7 @@ class Config:
 
         # Dataset paths
         self.dataset_path = os.path.join(self.base_path, 'HSI Data Sets',
-                                       'AVIRIS_augmented_dataset')
+                                       'AVIRIS_augmented_dataset_2')
 
         # Filter paths
         self.filter_path = os.path.join(self.base_path, 'Machine Learning Codes',
@@ -30,8 +30,8 @@ class Config:
         # self.superpixel_size = 4 # Change superpixel size here
 
         # Modified parameters for AVIRIS dataset
-        self.image_height = 100  # For our cropped images
-        self.image_width = 100
+        self.image_height = 64  # For our cropped images
+        self.image_width = 64
         self.num_wavelengths = 220  # AVIRIS has 220 bands
         self.wavelength_range = (800, 1700)  # nm, matching filter range
         # Generate full wavelength range
@@ -54,7 +54,7 @@ class Config:
 
         self.num_filters = 16
         # self.superpixel_size = 3
-        self.model_save_path = 'models/022425_AVIRIS_16filters_SRNet.pth'
+        self.model_save_path = 'models/022425_AVIRIS_16filters_SRNet_64pix.pth'
         self.results_path = 'results/022425'
 
 config = Config()

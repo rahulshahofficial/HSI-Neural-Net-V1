@@ -17,7 +17,7 @@ class HyperspectralViewer(QMainWindow):
         
         # Initialize variables
         self.hypercube = None
-        self.data_dir = "/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset"
+        self.data_dir = "/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset_2"
         self.wavelengths = np.linspace(400, 2500, 220)  # Full wavelength range
         
         # Create main widget and layout
@@ -137,33 +137,39 @@ class HyperspectralViewer(QMainWindow):
         """Update the image display when wavelength changes"""
         if self.hypercube is None:
             return
-            
+
         # Get current band and wavelength
         band_idx = self.wavelength_slider.value()
         wavelength = self.wavelengths[band_idx]
         self.wavelength_label.setText(f"Wavelength: {wavelength:.1f} nm (Band {band_idx})")
-        
+
+        # Clear the figure completely including any colorbars
+        self.fig_image.clear()
+        self.ax_image = self.fig_image.add_subplot(111)
+
         # Update image
-        self.ax_image.clear()
         band_image = self.hypercube[:, :, band_idx]
         im = self.ax_image.imshow(band_image, cmap='viridis')
         self.ax_image.set_title(f'Band {band_idx} ({wavelength:.1f} nm)')
         self.fig_image.colorbar(im, ax=self.ax_image)
         self.canvas_image.draw()
+
+        # Reconnect mouse click event (needed after clearing figure)
+        self.canvas_image.mpl_connect('button_press_event', self.on_click)
     
     def on_click(self, event):
         """Handle click events to show spectrum at clicked point"""
         if self.hypercube is None or event.inaxes != self.ax_image:
             return
-            
+
         x, y = int(event.xdata), int(event.ydata)
-        
+
         # Check bounds
         h, w, _ = self.hypercube.shape
         if 0 <= x < w and 0 <= y < h:
             # Get spectrum at clicked location
             spectrum = self.hypercube[y, x, :]
-            
+
             # Plot spectrum
             self.ax_spectrum.clear()
             self.ax_spectrum.plot(self.wavelengths, spectrum)
@@ -171,19 +177,18 @@ class HyperspectralViewer(QMainWindow):
             self.ax_spectrum.set_ylabel('Intensity')
             self.ax_spectrum.set_title(f'Spectrum at Pixel ({x}, {y})')
             self.ax_spectrum.grid(True)
-            
-            # Mark non-zero regions (used wavelength bands)
+
+            # Mark non-zero regions
             regions = np.where(spectrum > 0.01)[0]
             if len(regions) > 0:
                 min_idx, max_idx = regions[0], regions[-1]
-                self.ax_spectrum.axvspan(self.wavelengths[min_idx], self.wavelengths[max_idx], 
+                self.ax_spectrum.axvspan(self.wavelengths[min_idx], self.wavelengths[max_idx],
                                         alpha=0.2, color='green')
                 self.ax_spectrum.text(0.02, 0.95, f"Active range: {self.wavelengths[min_idx]:.1f}-{self.wavelengths[max_idx]:.1f} nm",
                                     transform=self.ax_spectrum.transAxes, verticalalignment='top',
                                     bbox=dict(boxstyle='round', facecolor='white', alpha=0.7))
-            
-            # Draw marker on image
-            self.update_display()  # Redraw the image
+
+            # Draw marker directly without redrawing the whole image
             self.ax_image.plot(x, y, 'ro', markersize=5)
             
             # Update both canvases
