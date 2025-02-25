@@ -339,6 +339,9 @@ class SpectralReconstructionNet(nn.Module):
         # Map to output spectral dimensions
         out = self.mapping(out)
 
+        # Apply sigmoid to force outputs between 0 and 1
+        out = torch.sigmoid(out)
+
         return out
 
     def compute_loss(self, outputs, targets, criterion):

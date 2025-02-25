@@ -1,0 +1,2 @@
+image_index,inference_time,psnr,rmse,mrae,ssim,spectral_fidelity,loss_mse_loss,loss_spectral_smoothness_loss,loss_spatial_consistency_loss,loss_spectral_angle_loss,loss_spectral_tv_loss,loss_spectral_dict_loss,loss_ssim_loss
+0,0.03124713897705078,3.3989593982696533,0.6761639714241028,3.6260757446289062,0.013624865996695776,0.07812666147947311,0.4571976065635681,3.3308324813842773,0.4885537028312683,1.4924263954162598,0.5691153407096863,0.0,0.991430938243866

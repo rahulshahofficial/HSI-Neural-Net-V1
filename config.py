@@ -13,7 +13,7 @@ class Config:
 
         # Dataset paths
         self.dataset_path = os.path.join(self.base_path, 'HSI Data Sets',
-                                       'AVIRIS_augmented_dataset')
+                                       'AVIRIS_augmented_dataset_2')
 
         # Filter paths
         self.filter_path = os.path.join(self.base_path, 'Machine Learning Codes',

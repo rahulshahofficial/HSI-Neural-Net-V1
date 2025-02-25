@@ -13,7 +13,7 @@ def load_and_normalize_image(filepath):
         img = (img - min_val) / (max_val - min_val)
         return img
 
-def generate_augmented_dataset(source_dir, output_dir, num_images=50, crop_size=64):
+def generate_augmented_dataset(source_dir, output_dir, num_images=100, crop_size=64):
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     source_files = [f for f in os.listdir(source_dir) if f.endswith('.tif')]
     source_images = [load_and_normalize_image(os.path.join(source_dir, f)) for f in source_files]

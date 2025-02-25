@@ -2,6 +2,7 @@ import time
 import numpy as np
 import torch
 import json
+import sys
 from datetime import datetime
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                            QHBoxLayout, QComboBox, QPushButton, QLabel, QSlider, QLineEdit,
@@ -89,7 +90,10 @@ class ReconstructionViewer(QMainWindow):
             num_heads=[2, 4, 8],
             use_spectral_dict=True  # Enable spectral dictionary for smoother reconstruction
         )
-        self.model.load_state_dict(torch.load(config.model_save_path, map_location='cpu'))
+        state_dict = torch.load(config.model_save_path, map_location='cpu')
+        filtered_state_dict = {k: v for k, v in state_dict.items() if not (k.endswith("total_ops") or k.endswith("total_params"))}
+        self.model.load_state_dict(filtered_state_dict, strict=True)
+
         self.model.eval()
 
         # Device configuration
@@ -538,9 +542,11 @@ class ReconstructionViewer(QMainWindow):
         wavelength = self.wavelengths[idx]
         self.wavelength_label.setText(f"Wavelength: {wavelength:.2f} nm")
 
-        # Update images
-        self.ax_orig.clear()
-        self.ax_recon.clear()
+        # Clear the entire figure and recreate the axes
+        self.figure.clear()
+        self.ax_orig = self.figure.add_subplot(self.gs[0, 0])
+        self.ax_recon = self.figure.add_subplot(self.gs[0, 1])
+        self.ax_spectrum = self.figure.add_subplot(self.gs[1, :])
 
         orig_img = self.original_image[idx]
         recon_img = self.full_reconstruction[idx].numpy()
@@ -561,13 +567,11 @@ class ReconstructionViewer(QMainWindow):
         self.figure.colorbar(orig_plot, ax=self.ax_orig, fraction=0.046, pad=0.04)
         self.figure.colorbar(recon_plot, ax=self.ax_recon, fraction=0.046, pad=0.04)
 
-        # If no spectrum has been plotted yet, clear the spectrum axis
-        if len(self.ax_spectrum.lines) == 0:
-            self.ax_spectrum.clear()
-            self.ax_spectrum.set_title('Click on image to see spectrum')
-            self.ax_spectrum.set_xlabel('Wavelength (nm)')
-            self.ax_spectrum.set_ylabel('Intensity')
-            self.ax_spectrum.grid(True)
+        # Setup the spectrum axis
+        self.ax_spectrum.set_title('Click on image to see spectrum')
+        self.ax_spectrum.set_xlabel('Wavelength (nm)')
+        self.ax_spectrum.set_ylabel('Intensity')
+        self.ax_spectrum.grid(True)
 
         self.figure.tight_layout()
         self.canvas.draw()
@@ -585,34 +589,43 @@ class ReconstructionViewer(QMainWindow):
         if self.original_image is None or self.full_reconstruction is None:
             return
 
+        # Clear the spectrum axis completely
+        self.ax_spectrum.clear()
+
+        # Remove any existing legend to avoid duplicates
+        legend = self.ax_spectrum.get_legend()
+        if legend is not None:
+            legend.remove()
+
         h, w = self.original_image.shape[1:]
         if 0 <= y < h and 0 <= x < w:
-            self.ax_spectrum.clear()
-
             # Plot original and reconstructed spectra
             self.ax_spectrum.plot(self.wavelengths,
-                                self.original_image[:, y, x],
-                                'b-', label='Original', linewidth=2)
+                                  self.original_image[:, y, x],
+                                  'b-', label='Original', linewidth=2)
             self.ax_spectrum.plot(self.wavelengths,
-                                self.full_reconstruction[:, y, x].numpy(),
-                                'r--', label='Reconstructed', linewidth=2)
+                                  self.full_reconstruction[:, y, x].numpy(),
+                                  'r--', label='Reconstructed', linewidth=2)
 
             # Mark current wavelength if available
             if self.current_wavelength_idx is not None:
                 current_wl = self.wavelengths[self.current_wavelength_idx]
                 orig_value = self.original_image[self.current_wavelength_idx, y, x]
                 recon_value = self.full_reconstruction[self.current_wavelength_idx, y, x].numpy()
-
                 self.ax_spectrum.axvline(current_wl, color='gray', linestyle=':', alpha=0.7)
                 self.ax_spectrum.plot([current_wl], [orig_value], 'bo', markersize=8)
                 self.ax_spectrum.plot([current_wl], [recon_value], 'ro', markersize=8)
 
-            # Set labels and title
             self.ax_spectrum.set_xlabel('Wavelength (nm)')
             self.ax_spectrum.set_ylabel('Intensity')
             self.ax_spectrum.set_title(f'Spectrum at ({x}, {y})')
+
+            # Create a new legend (old one was removed)
             self.ax_spectrum.legend()
             self.ax_spectrum.grid(True)
+
+            self.canvas.draw()
+
 
             # Calculate local metrics
             orig_spectrum = self.original_image[:, y, x]
@@ -1315,4 +1328,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()import sys
+    main()
