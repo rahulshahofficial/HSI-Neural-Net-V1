@@ -185,7 +185,7 @@ class SAM_Spectral(nn.Module):
 
 class SpectralReconstructionNet(nn.Module):
     def __init__(self, input_channels=1, out_channels=31, dim=32, deep_stage=3,
-                 num_blocks=[1, 1, 1], num_heads=[1, 2, 4]):
+                num_blocks=[1, 1, 1], num_heads=[1, 2, 4], use_spectral_dict=True):
         super(SpectralReconstructionNet, self).__init__()
         """
         SRNet for hyperspectral reconstruction
@@ -197,10 +197,21 @@ class SpectralReconstructionNet(nn.Module):
             deep_stage: Number of encoder/decoder stages
             num_blocks: Number of SAM blocks at each stage
             num_heads: Number of attention heads at each stage
+            use_spectral_dict: Whether to use the spectral dictionary for regularization
         """
         self.dim = dim
         self.out_channels = out_channels
         self.stage = deep_stage
+        self.use_spectral_dict = use_spectral_dict
+
+        if use_spectral_dict:
+            try:
+                # Import here to avoid circular imports
+                from spect_dict import SpectralDictionary
+                self.spectral_dict = SpectralDictionary(n_components=20)
+            except ImportError:
+                print("Warning: Could not import SpectralDictionary. Spectral dictionary regularization will be disabled.")
+                self.use_spectral_dict = False
 
         # Input embeddings - one for measurements, one for filter patterns
         self.embedding1 = nn.Conv2d(input_channels, dim, kernel_size=3, padding=1, bias=False)
@@ -228,14 +239,24 @@ class SpectralReconstructionNet(nn.Module):
         self.bottleneck = SAM_Spectral(
             dim=dim_stage, heads=num_heads[-1], num_blocks=num_blocks[-1])
 
-        # Decoder layers
+        # Decoder layers with adaptive dimension matching for skip connections
         self.decoder_layers = nn.ModuleList([])
         for i in range(deep_stage):
-            self.decoder_layers.append(nn.ModuleList([
-                nn.ConvTranspose2d(dim_stage, dim_stage // 2, stride=2, kernel_size=2, padding=0, output_padding=0),
-                nn.Conv2d(dim_stage, dim_stage // 2, 1, 1, bias=False),
-                SAM_Spectral(dim=dim_stage // 2, heads=num_heads[deep_stage - 1 - i], num_blocks=num_blocks[deep_stage - 1 - i]),
-            ]))
+            # Transposed convolution to upsample feature maps
+            decoder_up = nn.ConvTranspose2d(dim_stage, dim_stage // 2, stride=2, kernel_size=2, padding=0, output_padding=0)
+
+            # Adaptive dimension matching for skip connection
+            # This allows for flexibility in case encoder features have slightly different dimensions
+            decoder_fusion = nn.Conv2d(dim_stage, dim_stage // 2, 1, 1, bias=False)
+
+            # SAM block for spectral processing
+            decoder_sam = SAM_Spectral(
+                dim=dim_stage // 2,
+                heads=num_heads[deep_stage - 1 - i],
+                num_blocks=num_blocks[deep_stage - 1 - i]
+            )
+
+            self.decoder_layers.append(nn.ModuleList([decoder_up, decoder_fusion, decoder_sam]))
             dim_stage //= 2
 
         # Initialize weights
@@ -261,44 +282,69 @@ class SpectralReconstructionNet(nn.Module):
         # Process input measurements and filter pattern
         x = self.embedding1(x)
         mask = self.embedding2(filter_pattern)
-        
+
         # Combine both feature maps
         x = torch.cat((x, mask), dim=1)
         fea = self.embedding(x)
-        
+
         # Save initial features for residual connection
         residual = fea
         fea = self.down_sample(fea)
-        
-        # Encoder forward pass
+
+        # Encoder forward pass - store intermediate features for skip connections
         fea_encoder = []
         for (Attention, FeaDownSample) in self.encoder_layers:
             fea = Attention(fea)
-            fea_encoder.append(fea)
+            fea_encoder.append(fea)  # Save for skip connection
             fea = FeaDownSample(fea)
-        
+
         # Bottleneck
         fea = self.bottleneck(fea)
-        
+
         # Decoder forward pass with skip connections
         for i, (FeaUpSample, Fusion, Attention) in enumerate(self.decoder_layers):
+            # Upsample feature maps
             fea = FeaUpSample(fea)
-            fea = Fusion(torch.cat([fea, fea_encoder[self.stage - 1 - i]], dim=1))
+
+            # Ensure matching spatial dimensions for the skip connection
+            skip_connection = fea_encoder[self.stage - 1 - i]
+
+            # Adjust dimensions if necessary (resizing feature map)
+            if fea.shape[-2:] != skip_connection.shape[-2:]:
+                skip_connection = F.interpolate(
+                    skip_connection,
+                    size=fea.shape[-2:],
+                    mode='bilinear',
+                    align_corners=False
+                )
+
+            # Concatenate along channel dimension for the skip connection
+            combined = torch.cat([fea, skip_connection], dim=1)
+
+            # Apply 1x1 convolution to fuse features and reduce channels
+            fea = Fusion(combined)
+
+            # Apply spectral attention module
             fea = Attention(fea)
-        
+
         # Final upsampling and residual connection
         fea = self.up_sample(fea)
+
+        # Ensure matching dimensions for residual connection
+        if fea.shape != residual.shape:
+            fea = F.interpolate(fea, size=residual.shape[-2:], mode='bilinear', align_corners=False)
+
         out = fea + residual
-        
+
         # Map to output spectral dimensions
         out = self.mapping(out)
-        
+
         return out
-    
+
     def compute_loss(self, outputs, targets, criterion):
         """
         Compute total loss including reconstruction, spectral smoothness, and spatial consistency.
-        Compatible with the original loss function approach.
+        Enhanced with perceptual metrics (SSIM-based) to improve visual quality.
 
         Args:
             outputs: Predicted hyperspectral images
@@ -306,21 +352,124 @@ class SpectralReconstructionNet(nn.Module):
             criterion: Reconstruction loss function (e.g., MSELoss)
 
         Returns:
-            Total loss value
+            tuple: (total_loss, loss_components)
+                - total_loss: The weighted sum of all loss components
+                - loss_components: Dictionary containing individual loss values
         """
         # Reconstruction loss (Mean Squared Error)
         recon_loss = criterion(outputs, targets)
 
-        # Spectral Smoothness Loss: Penalizes large spectral variations
-        spectral_diff = outputs[:, 1:, :, :] - outputs[:, :-1, :, :]
-        spectral_smoothness_loss = torch.mean(spectral_diff ** 2)
+        # Spectral Smoothness Loss: Enhanced version with multi-order derivatives
+        # First-order smoothness (already implemented)
+        first_order_diff = outputs[:, 1:, :, :] - outputs[:, :-1, :, :]
+        first_order_smoothness = torch.mean(first_order_diff ** 2)
+
+        # Second-order smoothness (penalizes sudden changes in slope - very effective for reducing oscillations)
+        if outputs.shape[1] > 2:
+            second_order_diff = outputs[:, 2:, :, :] - 2 * outputs[:, 1:-1, :, :] + outputs[:, :-2, :, :]
+            second_order_smoothness = torch.mean(second_order_diff ** 2)
+        else:
+            second_order_smoothness = 0.0
+
+        # Combined spectral smoothness with higher weight on second-order
+        spectral_smoothness_loss = first_order_smoothness + 2.0 * second_order_smoothness
 
         # Spatial Consistency Loss: Encourages smooth changes between adjacent pixels
         dx = outputs[:, :, 1:, :] - outputs[:, :, :-1, :]
         dy = outputs[:, :, :, 1:] - outputs[:, :, :, :-1]
         spatial_consistency_loss = torch.mean(dx ** 2) + torch.mean(dy ** 2)
 
-        # Weighted Sum of Losses
-        total_loss = recon_loss + 0.1 * spatial_consistency_loss + 0.1 * spectral_smoothness_loss
+        # Spectral Angle Mapper loss: Measures similarity between spectral signatures
+        # Reshape to (batch_size, num_wavelengths, height*width)
+        b, c, h, w = outputs.shape
+        outputs_flat = outputs.reshape(b, c, -1)  # [B, C, H*W]
+        targets_flat = targets.reshape(b, c, -1)  # [B, C, H*W]
 
-        return total_loss
+        # Normalize along spectral dimension
+        outputs_norm = torch.nn.functional.normalize(outputs_flat, dim=1, p=2)
+        targets_norm = torch.nn.functional.normalize(targets_flat, dim=1, p=2)
+
+        # Compute dot product between normalized vectors (cosine similarity)
+        cos_sim = torch.sum(outputs_norm * targets_norm, dim=1)  # [B, H*W]
+
+        # Convert to angle and average (lower is better)
+        spectral_angle_loss = torch.mean(torch.acos(torch.clamp(cos_sim, -0.9999, 0.9999)))
+
+        # SSIM-based loss component (1-SSIM, since we minimize loss)
+        # We implement a simplified version that works with batched tensors
+        C1 = 0.01 ** 2
+        C2 = 0.03 ** 2
+
+        # Calculate local means and variances using average pooling
+        # For simplicity, we compute this across all spectral bands simultaneously
+        mu_x = torch.nn.functional.avg_pool2d(outputs, kernel_size=3, stride=1, padding=1)
+        mu_y = torch.nn.functional.avg_pool2d(targets, kernel_size=3, stride=1, padding=1)
+
+        mu_x_sq = mu_x ** 2
+        mu_y_sq = mu_y ** 2
+        mu_xy = mu_x * mu_y
+
+        sigma_x_sq = torch.nn.functional.avg_pool2d(outputs ** 2, kernel_size=3, stride=1, padding=1) - mu_x_sq
+        sigma_y_sq = torch.nn.functional.avg_pool2d(targets ** 2, kernel_size=3, stride=1, padding=1) - mu_y_sq
+        sigma_xy = torch.nn.functional.avg_pool2d(outputs * targets, kernel_size=3, stride=1, padding=1) - mu_xy
+
+        # Calculate SSIM
+        ssim_numerator = (2 * mu_xy + C1) * (2 * sigma_xy + C2)
+        ssim_denominator = (mu_x_sq + mu_y_sq + C1) * (sigma_x_sq + sigma_y_sq + C2)
+        ssim = ssim_numerator / ssim_denominator
+
+        # Convert to loss (1-SSIM)
+        ssim_loss = 1.0 - torch.mean(ssim)
+
+        # Spectral Total Variation Loss: More robust smoothness regularization
+        # It penalizes total absolute differences while preserving important edges/transitions
+        spectral_tv = torch.abs(outputs[:, 1:, :, :] - outputs[:, :-1, :, :])
+        # Use a soft approximation to L1 norm (Huber-like loss) to be differentiable
+        epsilon = 1e-3  # Small constant to avoid numerical issues
+        spectral_tv_loss = torch.mean(torch.sqrt(spectral_tv ** 2 + epsilon))
+
+        # Spectral Dictionary Prior Loss (if enabled)
+        spectral_dict_loss = 0.0
+        if hasattr(self, 'use_spectral_dict') and self.use_spectral_dict and hasattr(self, 'spectral_dict'):
+            try:
+                # Make sure dictionary is initialized on the first use
+                if not hasattr(self.spectral_dict, 'components'):
+                    self.spectral_dict.build_default_dictionary()
+
+                # Calculate dictionary prior loss
+                # First ensure the dictionary is on the same device as outputs
+                if self.spectral_dict.device != str(outputs.device):
+                    self.spectral_dict.device = str(outputs.device)
+                    self.spectral_dict.components = self.spectral_dict.components.to(outputs.device)
+                    self.spectral_dict.mean_spectrum = self.spectral_dict.mean_spectrum.to(outputs.device)
+
+                # Calculate the loss
+                spectral_dict_loss = self.spectral_dict.spectral_prior_loss(outputs.permute(0, 2, 3, 1).reshape(-1, c))
+            except Exception as e:
+                print(f"Warning: Failed to compute spectral dictionary loss: {str(e)}")
+                spectral_dict_loss = torch.tensor(0.0, device=outputs.device)
+
+        # Store all loss components in a dictionary
+        loss_components = {
+            'mse_loss': recon_loss.item(),
+            'spectral_smoothness_loss': spectral_smoothness_loss.item(),
+            'spatial_consistency_loss': spatial_consistency_loss.item(),
+            'spectral_angle_loss': spectral_angle_loss.item(),
+            'spectral_tv_loss': spectral_tv_loss.item(),
+            'spectral_dict_loss': spectral_dict_loss.item() if isinstance(spectral_dict_loss, torch.Tensor) else spectral_dict_loss,
+            'ssim_loss': ssim_loss.item()
+        }
+
+        # Weighted Sum of Losses - balanced to emphasize both spectral accuracy and perceptual quality
+        # Increased weight on spectral smoothness to encourage smoother reconstructions
+        total_loss = (
+            recon_loss +
+            0.1 * spatial_consistency_loss +
+            0.3 * spectral_smoothness_loss +  # Increased from 0.1 to 0.3
+            0.15 * spectral_tv_loss +         # Added TV loss for robust smoothness
+            0.2 * spectral_angle_loss +
+            0.3 * spectral_dict_loss +        # Added dictionary prior if available
+            0.5 * ssim_loss
+        )
+
+        return total_loss, loss_components

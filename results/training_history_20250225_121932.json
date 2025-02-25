@@ -1,0 +1,79 @@
+{
+  "epochs": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "train_loss": [
+    9.541707038879395,
+    6.281509876251221,
+    4.177227020263672,
+    2.899585723876953,
+    2.1885910034179688
+  ],
+  "val_loss": [
+    16.517667770385742,
+    10.523738861083984,
+    6.822713375091553,
+    4.704885005950928,
+    3.647475242614746
+  ],
+  "train_metrics": [
+    {
+      "mse_loss": 1.6593538522720337,
+      "spectral_smoothness_loss": 21.806413650512695,
+      "spatial_consistency_loss": 0.2791079580783844,
+      "spectral_angle_loss": 1.4174964427947998,
+      "spectral_tv_loss": 1.07662034034729,
+      "spectral_dict_loss": 1.2556283473968506,
+      "ssim_loss": 0.9816714525222778
+    },
+    {
+      "mse_loss": 1.1405326128005981,
+      "spectral_smoothness_loss": 13.224054336547852,
+      "spatial_consistency_loss": 0.27378636598587036,
+      "spectral_angle_loss": 1.3820158243179321,
+      "spectral_tv_loss": 0.849219024181366,
+      "spectral_dict_loss": 0.847946286201477,
+      "ssim_loss": 0.9764239192008972
+    },
+    {
+      "mse_loss": 0.7773138284683228,
+      "spectral_smoothness_loss": 7.814863681793213,
+      "spatial_consistency_loss": 0.2691635489463806,
+      "spectral_angle_loss": 1.3399896621704102,
+      "spectral_tv_loss": 0.6765570640563965,
+      "spectral_dict_loss": 0.5723284482955933,
+      "ssim_loss": 0.974714994430542
+    },
+    {
+      "mse_loss": 0.531517505645752,
+      "spectral_smoothness_loss": 4.646116733551025,
+      "spatial_consistency_loss": 0.26464229822158813,
+      "spectral_angle_loss": 1.3064543008804321,
+      "spectral_tv_loss": 0.548240065574646,
+      "spectral_dict_loss": 0.39003539085388184,
+      "ssim_loss": 0.9744628667831421
+    },
+    {
+      "mse_loss": 0.37303513288497925,
+      "spectral_smoothness_loss": 2.976365804672241,
+      "spatial_consistency_loss": 0.26012325286865234,
+      "spectral_angle_loss": 1.283217430114746,
+      "spectral_tv_loss": 0.46259623765945435,
+      "spectral_dict_loss": 0.2727484107017517,
+      "ssim_loss": 0.9775526523590088
+    }
+  ],
+  "val_metrics": [
+    {
+      "mse_loss": 3.2633779048919678,
+      "spectral_smoothness_loss": 37.9386100769043,
+      "spatial_consistency_loss": 0.7652068138122559,
+      "spectral_angle_loss": 1.4218584299087524,
+      "spectral_tv_loss": 1.9106544256210327,
+      "spectral_dict_loss": 2.4282124042510986,
+      "ssim_loss": 0.9935070276260376,
+      "psnr": 

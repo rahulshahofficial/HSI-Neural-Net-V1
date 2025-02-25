@@ -18,10 +18,19 @@ class HyperspectralProcessor:
 
     def load_data(self, num_images=None):
         """Load pre-generated augmented dataset"""
-        data_dir = "/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset_2"
-        # data_dir = "V:\SimulationData\Rahul\Hyperspectral Imaging Project\HSI Data Sets\AVIRIS_augmented_dataset"
-        files = sorted([f for f in os.listdir(data_dir) if f.endswith('.tif')])
+        # Set data directory based on operating system
+        if os.name == 'nt':  # Windows
+            self.data_dir = r"V:\SimulationData\Rahul\Hyperspectral Imaging Project\HSI Data Sets\AVIRIS_augmented_dataset"
+        else:  # macOS or Linux
+            self.data_dir = "/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset"
 
+        # Make sure the directory exists, otherwise use a default location
+        if not os.path.exists(self.data_dir):
+            self.data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "datasets")
+            if not os.path.exists(self.data_dir):
+                os.makedirs(self.data_dir)
+
+        files = sorted([f for f in os.listdir(self.data_dir) if f.endswith('.tif')])
         if num_images and num_images < len(files):
             files = files[:num_images]
 
@@ -30,7 +39,7 @@ class HyperspectralProcessor:
 
         for file in files:
             try:
-                with rasterio.open(os.path.join(data_dir, file)) as src:
+                with rasterio.open(os.path.join(self.data_dir, file)) as src:
                     # Read and transpose to (H,W,C) format
                     data = src.read()  # Shape: (C,H,W)
                     data = np.transpose(data, (1, 2, 0))  # Shape: (H,W,C)
@@ -47,6 +56,7 @@ class HyperspectralProcessor:
             raise ValueError("No data could be loaded")
 
         return np.stack(all_data)
+
 
     def prepare_datasets(self, data):
         """Prepare training, validation, and test datasets."""
@@ -77,6 +87,37 @@ class HyperspectralProcessor:
         print("\nVisualizing filter arrangements...")
         train_dataset.visualize_filter_pattern(num_repeats=3)
         train_dataset.visualize_filter_transmissions()
+
+        # Build spectral dictionary if enabled
+        try:
+            from spect_dict import SpectralDictionary
+            print("\nBuilding spectral dictionary from training data...")
+
+            # Sample a subset of spectra from training data
+            sample_indices = np.random.choice(
+                train_data.shape[1] * train_data.shape[2],
+                min(10000, train_data.shape[1] * train_data.shape[2]),
+                replace=False
+            )
+
+            spectra_samples = []
+            for i in range(min(train_data.shape[0], 50)):  # Use up to 50 images
+                img_data = train_data[i]
+                # Reshape to [H*W, C]
+                img_spectra = img_data.reshape(-1, img_data.shape[2])
+                # Sample spectra
+                img_samples = img_spectra[sample_indices % img_spectra.shape[0]]
+                spectra_samples.append(img_samples)
+
+            # Combine all samples
+            all_samples = np.vstack(spectra_samples)
+
+            # Build dictionary
+            spectral_dict = SpectralDictionary(n_components=20)
+            spectral_dict.build_from_data(all_samples, force_rebuild=True)
+
+        except Exception as e:
+            print(f"Warning: Failed to build spectral dictionary: {str(e)}")
 
         # Create data loaders
         train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True)
@@ -208,7 +249,8 @@ def main():
 
         print("\nEvaluating model...")
         test_loss, outputs, targets = trainer.evaluate_model(test_loader)
-        print(f"Final test loss: {test_loss:.6f}")
+        print(f"Final test loss: {test_loss['total_loss']:.6f}")
+
 
         print("\nGenerating visualizations...")
         processor.visualize_reconstruction(model, test_loader)
