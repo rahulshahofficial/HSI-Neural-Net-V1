@@ -13,7 +13,7 @@ class Config:
 
         # Dataset paths
         self.dataset_path = os.path.join(self.base_path, 'HSI Data Sets',
-                                       'AVIRIS_augmented_dataset_2')
+                                       'AVIRIS_augmented_dataset')
 
         # Filter paths
         self.filter_path = os.path.join(self.base_path, 'Machine Learning Codes',
@@ -54,7 +54,7 @@ class Config:
 
         self.num_filters = 16
         # self.superpixel_size = 3
-        self.model_save_path = 'models/022525_AVIRIS_16filters_SRNet_64pix.pth'
+        self.model_save_path = 'models/022525_AVIRIS_16filters_SRNet.pth'
         self.results_path = 'results/022525'
 
 config = Config()

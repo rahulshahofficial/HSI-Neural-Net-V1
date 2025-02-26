@@ -20,9 +20,9 @@ class HyperspectralProcessor:
         """Load pre-generated augmented dataset"""
         # Set data directory based on operating system
         if os.name == 'nt':  # Windows
-            self.data_dir = r"V:\SimulationData\Rahul\Hyperspectral Imaging Project\HSI Data Sets\AVIRIS_augmented_dataset_2"
+            self.data_dir = r"V:\SimulationData\Rahul\Hyperspectral Imaging Project\HSI Data Sets\AVIRIS_augmented_dataset"
         else:  # macOS or Linux
-            self.data_dir = "/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset_2"
+            self.data_dir = "/Volumes/ValentineLab/SimulationData/Rahul/Hyperspectral Imaging Project/HSI Data Sets/AVIRIS_augmented_dataset"
 
         # Make sure the directory exists, otherwise use a default location
         if not os.path.exists(self.data_dir):
@@ -219,7 +219,7 @@ class HyperspectralProcessor:
 
 def main():
     """Main training and evaluation pipeline."""
-    num_images = 100
+    num_images = 250
 
     print("Starting Hyperspectral Neural Network Training Pipeline with SRNet...")
     print(f"\nConfiguration:")
