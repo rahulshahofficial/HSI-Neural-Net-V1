@@ -23,10 +23,10 @@ class Config:
         self.batch_size = 64
         self.num_epochs = 100
         self.learning_rate = 1e-4
-        self.num_filters = 16
+        self.num_filters = 25
         # self.num_filters = 16
-        self.superpixel_height = 4
-        self.superpixel_width = 4 # Change superpixel size here
+        self.superpixel_height = 5
+        self.superpixel_width = 5 # Change superpixel size here
         # self.superpixel_size = 4 # Change superpixel size here
 
         # Modified parameters for AVIRIS dataset
@@ -52,10 +52,10 @@ class Config:
         # self.superpixel_size = 8 # Change superpixel size here
         # self.model_save_path = 'models/013125_hyperspectral_model_800to1700.pth'
 
-        self.num_filters = 16
+        self.num_filters = 25
         # self.superpixel_size = 3
-        self.model_save_path = 'models/022525_AVIRIS_16filters_SRNet.pth'
-        self.results_path = 'results/022525'
+        self.model_save_path = 'models/022625_AVIRIS_25filters_SRNet.pth'
+        self.results_path = 'results/022625'
 
 config = Config()
 print(f"Number of wavelength indices: {len(config.wavelength_indices)}")

@@ -196,5 +196,49 @@
         ]
       }
     }
+  },
+  {
+    "timestamp": "20250227_102851",
+    "data": {
+      "parameters": 14086684,
+      "flops": 7697255424.0,
+      "time_per_frame_ms": 23.416423797607422,
+      "model_config": {
+        "dimension": 64,
+        "stages": 3,
+        "blocks": [
+          1,
+          2,
+          3
+        ],
+        "heads": [
+          2,
+          4,
+          8
+        ]
+      }
+    }
+  },
+  {
+    "timestamp": "20250227_102931",
+    "data": {
+      "parameters": 14086684,
+      "flops": 7697255424.0,
+      "time_per_frame_ms": 23.4377384185791,
+      "model_config": {
+        "dimension": 64,
+        "stages": 3,
+        "blocks": [
+          1,
+          2,
+          3
+        ],
+        "heads": [
+          2,
+          4,
+          8
+        ]
+      }
+    }
   }
 ]
